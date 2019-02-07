@@ -24,7 +24,7 @@ class EnsemblGenome(GenomeBase):
     @include_in_downloads
     def _pb_find_server(self):
         ensembl_urls = [
-            "http://ftp.ensembl.org/pub/release-%i/",
+            "ftp://ftp.ensembl.org/pub/release-%i/",
             "ftp://ftp.ensemblgenomes.org/pub/release-%i/fungi/",
             "ftp://ftp.ensemblgenomes.org/pub/release-%i/metazoa/",
             "ftp://ftp.ensemblgenomes.org/pub/release-%i/plants/",
@@ -66,6 +66,10 @@ class EnsemblGenome(GenomeBase):
             "genes.gtf",
         )
 
+    @property
+    def gtf_dependencies(self):
+        return self._pb_download_gtf()
+
     @include_in_downloads
     def _pb_download_genome_fasta(self):
         return self._pb_download(
@@ -84,6 +88,15 @@ class EnsemblGenome(GenomeBase):
             "cdna.fasta",
         )
 
+    @include_in_downloads
+    def _pb_download_proptein_fasta(self):
+        return self._pb_download(
+            "pep",
+            f"fasta/{self.species.lower()}/pep/",
+            fr"{self.species}\..+\.pep.all.fa.gz",
+            "pep.fasta",
+        )
+
     def _pb_download(self, pb_name, url, regexps, output_filename):
         def do_download(output_path):
             real_url = self.base_url + url
@@ -96,6 +109,7 @@ class EnsemblGenome(GenomeBase):
                     "Found wrong number of matches for regexps: %s. \nRaw was %s"
                     % (matches, raw)
                 )
+            print(real_url + matches[0])
             download_file_and_gunzip(
                 real_url + matches[0], output_path / output_filename
             )
@@ -118,26 +132,25 @@ class EnsemblGenome(GenomeBase):
     def base_url(self):
         return self.server_job.find_file("url.txt").read_text()
 
-    def job_genes(self):
+    def _msg_pack_job(self, property_name, filename, callback_function):
         def dump(output_filename):
-            df = self._prepare_df_genes()
-            df.to_msgpack(output_filename / "df_genes.msgpack")
+            df = callback_function(self)
+            df.to_msgpack(output_filename / filename)
 
         j = self.prebuild_manager.prebuild(
-            f"ensembl/{self.species}_{self.revision}/genes_msgpack",
+            f"ensembl/{self.species}_{self.revision}/{property_name}",
             # we don't use the version for this, since we need it for building
             # various aligner versioned indices
             "1",
             [],
-            ["df_genes.msgpack"],
+            [filename],
             dump,
         )
         j.depends_on(
             ppg.FunctionInvariant(
-                Path("EnsemblGenome") / self.name / "df_genes.msgpack" / "func",
-                self.__class__._prepare_df_genes,
-            ),
-            self._pb_download_gtf()
+                Path("EnsemblGenome") / self.name / property_name / "func",
+                callback_function,
+            )
         )
         self._prebuilds.append(j)
         return j
@@ -161,7 +174,7 @@ class EnsemblGenome(GenomeBase):
                 Path("EnsemblGenome") / self.name / "df_transcripts.msgpack" / "func",
                 self.__class__._prepare_df_transcripts,
             ),
-            self._pb_download_gtf()
+            self._pb_download_gtf(),
         )
         self._prebuilds.append(j)
         return j

@@ -54,6 +54,14 @@ class TestEnsembl:
             checksum_file(g.find_file("genes.gtf"))
             == "8bdeec9b3db5278668dbff8b34e9d93b"
         )
+        assert (
+            checksum_file(g.find_file("genes.gtf"))
+            == "8bdeec9b3db5278668dbff8b34e9d93b"
+        )
+        assert (
+            checksum_file(g.find_file("pep.fasta"))
+            == "9580fd44832d419c38469d657f6e2484"
+        )
         with pytest.raises(OSError):
             g.find_file("no such file")
         assert index.name_file("subread_index.reads").exists()
@@ -94,6 +102,29 @@ class TestEnsembl:
         ) == index_old.name_file("subread_index.reads")
         index_genome = g.build_index(subread_intermediate)
         assert "/genome/" in str(index_genome.filenames[0])
+
+        assert g.get_chromosome_lengths() == {
+            "IV": 1_467_287,
+            "MT": 23564,
+            "V": 1_519_140,
+            "III": 907_494,
+            "II": 870_771,
+            "VII": 1_800_949,
+            "I": 693_414,
+            "VI": 1_836_693,
+        }
+
+        assert g.get_genome_sequence("VI", 20, 30) == "ACCGCTGAGA"
+        assert (
+            g.get_cdna_sequence("EFAGOT00000000349")
+            == "GCTCGCGTGGCGTAATGGCAACGCGTCTGACTTCTAATCAGAAGATTGTGGGTTCGACCC"
+            "CCACCGTGAGTG"
+        )
+        assert (
+            g.get_protein_sequence("AAS53315")
+            == "MFSTRICSLLARPFMVPIVPRFGSALLQKPLNGVVVPQFTRGFKVRTSVKKFCAHCYIVR"
+            "RKGRVYVYCKSNNKHKQRQG"
+        )
 
     def test_species_formating(self,):
         p = Path("prebuild")
@@ -151,7 +182,7 @@ class TestEnsembl:
         ppg.run_pipegraph()
 
         df = g.df_transcripts
-        assert 'gene_stable_id' in df.columns
+        assert "gene_stable_id" in df.columns
         assert len(df) == 6928
         assert df["chr"].dtype.name == "category"
         assert df["biotype"].dtype.name == "category"
@@ -161,8 +192,17 @@ class TestEnsembl:
         assert df.loc["KIS71021"].stop == 356_690
         assert df.loc["KIS71021"].gene_stable_id == "UMAG_12118"
         assert df.loc["KIS71021"].biotype == "protein_coding"
-        assert df.loc["KIS71021"].exons == (
-            (354_742, 354_936),
-            (355_222, 356_690),
-        )
+        assert df.loc["KIS71021"].exons == ((354_742, 354_936), (355_222, 356_690))
         assert df.loc["KIS71021"].exon_stable_ids == ("KIS71021-1", "KIS71021-2")
+
+    def test_all_proteins(self, mock_download):
+        p = Path("prebuild")
+        p.mkdir()
+        pb = PrebuildManager(p)
+        g = EnsemblGenome("Ustilago_maydis", 33, pb)
+        g.download_genome()
+        g.job_proteins()
+        ppg.run_pipegraph()
+
+        df = g.df_proteins
+        assert df.strand.isin([1, -1]).all()

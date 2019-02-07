@@ -1,14 +1,19 @@
 from pathlib import Path
+from abc import ABC, abstractmethod
+import pandas as pd
 import gtfparse
 from dppd import dppd
-import pandas as pd
 import pysam
-from mbf_externals.util import lazy_property
+from .common import reverse_complement
 
 dp, X = dppd()
 
 
 def normalize_strand(strand):
+    if not isinstance(strand, pd.Series):
+        raise ValueError("normalize_strand expects a pd.series")
+    if not strand.isin(["+", "-", "."]).all():
+        raise ValueError("normalize_strand called on something that was not +-.")
     return strand.replace({"+": 1, "-": -1, ".": 0})
 
 
@@ -26,11 +31,85 @@ def class_with_downloads(cls):
     return cls
 
 
-class GenomeBase:
+class MsgPackProperty:
+    """
+        a message pack property is a property x_y that get's
+        calculated by a method _prepare_x_y
+        and automatically stored/loaded by a caching job
+        as msgpack file.
+        the actual job used depends on the GenomeBase subclass
+
+        The dependency_callback get's called with the GenomeBase subclass
+        instance and can return dependencys for the generated job
+
+        The object has three members afterwards:
+            x_y -> get the value returned by _prepare_x_y (lazy load)
+            _prepare_x_y -> that's the one you need to implement,
+                        it's docstring is copied to this propery
+            job_y -> the job that caches _prepare_x_y() results
+
+        """
+
+    def __init__(self, dependency_callback=None):
+        self.dependency_callback = dependency_callback
+
+
+def msgpack_unpacking_class(cls):
+    for d in list(cls.__dict__):
+        v = cls.__dict__[d]
+        if isinstance(v, MsgPackProperty):
+            if not "_" in d:
+                raise NotImplementedError(
+                    "Do not know how to create job name for msg_pack_properties that do not containt  _"
+                )
+            job_name = "job_" + d[d.find("_") + 1 :]
+            filename = d + ".msgpack"
+            calc_func = getattr(cls, f"_prepare_{d}")
+
+            def load(self, d=d, filename=filename):
+                if not hasattr(self, "__" + d):
+                    fn = self.find_file(filename)
+                    if not fn.exists():
+                        raise ValueError(
+                            f"{d} accessed before the respecting {job_name} call"
+                        )
+                    df = pd.read_msgpack(fn)
+                    setattr(self, "__" + d, df)
+                return getattr(self, "__" + d)
+
+            p = property(load)
+            p.__doc__ == calc_func.__doc__
+            setattr(cls, d, p)
+            if not hasattr(cls, job_name):
+
+                def gen_job(
+                    self,
+                    d=d,
+                    filename=filename,
+                    calc_func=calc_func,
+                    dependency_callback=v.dependency_callback,
+                ):
+                    j = self._msg_pack_job(d, filename, calc_func)
+                    j.depends_on(dependency_callback(self))
+                    return j
+
+                setattr(cls, job_name, gen_job)
+            else:  # pragma: no cover
+                pass
+
+    return cls
+
+
+@msgpack_unpacking_class
+class GenomeBase(ABC):
     def __init__(self):
         self._filename_lookups = []
         self._prebuilds = []
         self._download_jobs = []
+
+    @abstractmethod
+    def _msg_pack_job(self, property_name, filename, callback_function):
+        raise NotImplementedError()
 
     def download_genome(self):
         """All the jobs needed to download the genome and prepare it for usage"""
@@ -131,6 +210,25 @@ class GenomeBase:
         with pysam.FastaFile(str(self.find_file("cdna.fasta"))) as f:
             return f.fetch(transcript_stable_id)
 
+    def get_cds_sequence(self, protein_id, protein_info=None):
+        """Get the coding sequence (rna) of a protein"""
+        if protein_info is None:
+            protein_info = self.df_proteins.loc[protein_id]
+        cdna = ""
+        chr = protein_info["chr"]
+        for start, stop in protein_info["cds"]:
+            cdna += self.get_genome_sequence(chr, start, stop)
+        if protein_info["strand"] not in (1, -1):
+            raise ValueError(protein_info["strand"])
+        if protein_info["strand"] == -1:
+            cdna = reverse_complement(cdna)
+        return cdna
+
+    def get_protein_sequence(self, protein_id):
+        """Get the AA sequence of a protein"""
+        with pysam.FastaFile(str(self.find_file("pep.fasta"))) as f:
+            return f.fetch(protein_id)
+
     def get_gtf(self):
         gtf_filename = self.find_file("genes.gtf")
         if gtf_filename is None:
@@ -138,6 +236,17 @@ class GenomeBase:
         return gtfparse.read_gtf(gtf_filename)
 
     def _prepare_df_genes(self):
+        """Return a DataFrame with  gene information:
+            gene_stable_id
+            name
+            chr
+            start
+            stop
+            strand
+            tss
+            tes
+            biotype
+        """
         df = self.get_gtf()
         if len(df) == 0:  # a genome without gene information
             return pd.DataFrame(
@@ -187,12 +296,15 @@ class GenomeBase:
         )
         return genes
 
-    @lazy_property
-    def df_genes(self):
-        fn = self.find_file("df_genes.msgpack")
-        return pd.read_msgpack(fn)
-
     def _prepare_df_transcripts(self):
+        """Get a DataFrame with all the transcript information
+            transcript_stable_id (index),
+            gene_stable_id,
+            name,
+            chr, start, stop, strand,
+            biotype,
+            exons  - list (start, stop, phase)
+        """
         df = self.get_gtf()
         if len(df) == 0:
             df = pd.DataFrame(
@@ -254,19 +366,54 @@ class GenomeBase:
         result = result.assign(exons=result_exons, exon_stable_ids=result_exon_ids)
         return result
 
-    @lazy_property
-    def df_transcripts(self):
-        """Get a DataFrame with all the transcript information
-            transcript_stable_id (index),
+    def _prepare_df_proteins(self):
+        """Get a DataFrame with protein information
+            protein_stable_id (index)
+            transcript_stable_id,
             gene_stable_id,
-            name,
-            chr, start, stop, strand,
-            biotype,
-            exons  - list (start, stop, phase)
+            chr,
+            strand
+            cds - [(start, stop)]  # in genomic coordinates
         """
-        fn = self.find_file("df_transcripts.msgpack")
-        if not fn.exists():
-            raise ValueError(
-                "df_transcripts called before job_transcripts() job has run"
-            )
-        return pd.read_msgpack(fn)
+        df = self.get_gtf()
+        if len(df) == 0:
+            df = pd.DataFrame(
+                {
+                    "protein_stable_id": [],
+                    "transcript_stable_id": [],
+                    "gene_stable_id": [],
+                    "chr": [],
+                    "strand": [],
+                    "cds": [],
+                }
+            ).set_index("protein_stable_id")
+            return df
+        cds = df[df.feature == "CDS"]
+        result = {
+            "protein_stable_id": [],
+            "transcript_stable_id": [],
+            "gene_stable_id": [],
+            "chr": [],
+            "strand": [],
+            "cds": [],
+        }
+
+        for protein_stable_id, sub_df in cds.groupby("protein_id"):
+            transcript_stable_id = sub_df.transcript_id.iloc[0]
+            gene_stable_id = sub_df.gene_id.iloc[0]
+            chr = sub_df.seqname.iloc[0]
+            strand = sub_df.strand.iloc[0]
+            cds = list(zip(sub_df.start - 1, sub_df.end))
+            result["protein_stable_id"].append(protein_stable_id)
+            result["gene_stable_id"].append(gene_stable_id)
+            result["transcript_stable_id"].append(transcript_stable_id)
+            result["chr"].append(chr)
+            result["strand"].append(strand)
+            result["cds"].append(cds)
+        result = pd.DataFrame(result).set_index("protein_stable_id")
+        result = result.assign(strand=normalize_strand(result.strand))
+        return result
+
+    df_genes = MsgPackProperty(lambda self: self.gtf_dependencies)
+    df_transcripts = MsgPackProperty(lambda self: self.gtf_dependencies)
+    df_proteins = MsgPackProperty(lambda self: self.gtf_dependencies)

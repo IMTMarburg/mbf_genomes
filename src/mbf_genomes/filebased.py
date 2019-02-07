@@ -1,13 +1,21 @@
 import pypipegraph as ppg
 from pathlib import Path
 from .base import GenomeBase, include_in_downloads, class_with_downloads
-from .common import reverse_complement, iter_fasta, wrappedIterator
+from .common import reverse_complement, iter_fasta, wrappedIterator, EukaryoticCode
 from mbf_externals.prebuild import PrebuildFileInvariantsExploding
 
 
 @class_with_downloads
 class FileBasedGenome(GenomeBase):
-    def __init__(self, name, genome_fasta_file, gtf_file=None, cdna_fasta_file=None):
+    def __init__(
+        self,
+        name,
+        genome_fasta_file,
+        gtf_file=None,
+        cdna_fasta_file=None,
+        protein_fasta_file=None,
+        genetic_code=EukaryoticCode,
+    ):
         """
         Parameters
         ----------
@@ -16,22 +24,29 @@ class FileBasedGenome(GenomeBase):
             gtf_file: job / Path / str
             cdna_fasta_file: job / path / str / list of such, None
                 generated from gtf + genome if not set
+            protein_fasta_file: job / path / str / list of such, None
+                generated from gtf + genome if not set
+            genetic_code: a common.GeneticCode object defining the translation tables and start codons
         """
         super().__init__()
         self.name = name
         ppg.assert_uniqueness_of_object(self)
+        self.genetic_code = genetic_code
         self.cache_dir = (
             Path(ppg.util.global_pipegraph.cache_folder) / "FileBasedGenome" / self.name
         )
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+
         self.genome_fasta_filename = self.cache_dir / "dna" / "genome.fasta"
         self.genome_fasta_dependencies = self.prep_fasta(
             genome_fasta_file, self.genome_fasta_filename
         )
+
         self.gtf_filename, self.gtf_dependencies = ppg.util.job_or_filename(
             gtf_file,
             lambda x: PrebuildFileInvariantsExploding(self.name + "_gtf_file", [x]),
         )
+
         self.cdna_fasta_filename = self.cache_dir / "cdna" / "cdna.fasta"
         if cdna_fasta_file:
             self.cdna_fasta_dependencies = self.prep_fasta(
@@ -42,6 +57,17 @@ class FileBasedGenome(GenomeBase):
         else:
             self.cdna_fasta_filename = None
             self.cdna_fasta_dependencies = []
+
+        self.protein_fasta_filename = self.cache_dir / "protein" / "pep.fasta"
+        if protein_fasta_file:
+            self.protein_fasta_dependencies = self.prep_fasta(
+                protein_fasta_file, self.protein_fasta_filename
+            )
+        elif gtf_file:
+            self.protein_fasta_dependencies = self.create_protein_from_genome_and_gtf()
+        else:
+            self.protein_fasta_filename = None
+            self.protein_fasta_dependencies = []
 
         self._filename_lookups = {
             "genome.fasta": self.genome_fasta_filename,
@@ -55,10 +81,14 @@ class FileBasedGenome(GenomeBase):
             deps = input_filenames
         elif isinstance(input_filenames, (str, Path)):
             filenames = [str(input_filenames)]
-            deps = PrebuildFileInvariantsExploding(self.name + "_prep_fasta", filenames)
+            deps = PrebuildFileInvariantsExploding(
+                str(output_filename) + "_prep_fasta", filenames
+            )
         else:
             filenames = [str(x) for x in input_filenames]
-            deps = PrebuildFileInvariantsExploding(self.name + "_prep_fasta", filenames)
+            deps = PrebuildFileInvariantsExploding(
+                str(output_filename) + "_prep_fasta", filenames
+            )
 
         def prep(output_filename):
             import pysam
@@ -99,7 +129,27 @@ class FileBasedGenome(GenomeBase):
                     op.write(f">{transcript_stable_id}\n{seq}\n")
 
         job = ppg.FileGeneratingJob(self.cdna_fasta_filename, create).depends_on(
-            self.job_transcripts()
+            self.job_transcripts(), self.genome_fasta_dependencies
+        )
+        self._download_jobs.append(job)
+        return job
+
+    def create_protein_from_genome_and_gtf(self):
+        Path(self.protein_fasta_filename).parent.mkdir(exist_ok=True)
+
+        def create(output_filename):
+            proteins = self.df_proteins
+            with open(output_filename, "w") as op:
+                for protein_stable_id, protein_info in proteins.iterrows():
+                    cdna = self.get_cds_sequence(protein_stable_id, protein_info)
+                    seq = self.genetic_code.translate_dna(
+                        cdna, raise_on_non_multiple_of_three=False
+                    )
+                    seq = "".join(wrappedIterator(80)(seq))
+                    op.write(f">{protein_stable_id}\n{seq}\n")
+
+        job = ppg.FileGeneratingJob(self.protein_fasta_filename, create).depends_on(
+            self.job_proteins(), self.genome_fasta_dependencies
         )
         self._download_jobs.append(job)
         return job
@@ -108,36 +158,16 @@ class FileBasedGenome(GenomeBase):
     def prepare_gtf(self):
         return self.gtf_dependencies
 
-    def job_genes(self):
+    def _msg_pack_job(self, property_name, filename, callback_function):
         out_dir = self.cache_dir / "lookup"
         out_dir.mkdir(exist_ok=True)
 
         def dump(output_filename):
-            df = self._prepare_df_genes()
+            df = callback_function(self)
             df.to_msgpack(output_filename)
 
-        j = ppg.FileGeneratingJob(out_dir / "df_genes.msgpack", dump).depends_on(
-            ppg.FunctionInvariant(
-                out_dir / "df_genes.msgpack" / "func", self.__class__._prepare_df_genes
-            )
+        j = ppg.FileGeneratingJob(out_dir / filename, dump).depends_on(
+            ppg.FunctionInvariant(out_dir / filename / property_name, callback_function)
         )
-        j.depends_on(self.gtf_dependencies)
-        self._prebuilds.append(j)
-
-    def job_transcripts(self):
-        out_dir = self.cache_dir / "lookup"
-        out_dir.mkdir(exist_ok=True)
-
-        def dump(output_filename):
-            df = self._prepare_df_transcripts()
-            df.to_msgpack(output_filename)
-
-        j = ppg.FileGeneratingJob(out_dir / "df_transcripts.msgpack", dump).depends_on(
-            ppg.FunctionInvariant(
-                out_dir / "df_transcripts.msgpack" / "func",
-                self.__class__._prepare_df_genes,
-            )
-        )
-        j.depends_on(self.gtf_dependencies)
         self._prebuilds.append(j)
         return j

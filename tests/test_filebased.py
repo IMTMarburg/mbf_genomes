@@ -2,7 +2,7 @@ import pytest
 from pathlib import Path
 import pypipegraph as ppg
 from mbf_genomes import FileBasedGenome
-from mbf_genomes.common import iter_fasta
+from mbf_genomes.common import iter_fasta, ProkaryoticCode
 from mbf_externals.util import UpstreamChangedError
 
 
@@ -17,6 +17,7 @@ class TestFilebased:
             data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz",
             data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz",
             data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz",
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz",
         )
         g.download_genome()
         g.job_transcripts()
@@ -55,12 +56,21 @@ class TestFilebased:
         assert len(gf) == 246
         assert set([len(x) for x in gf.transcript_stable_ids]) == set([1])
 
+        assert g.find_file("pep.fasta").exists()
+        assert g.find_prebuild("pep.fasta") == g.protein_fasta_dependencies
+        assert g.find_file("pep.fasta").with_suffix(".fasta.fai").exists()
+        assert (
+            g.get_protein_sequence("BAF35037")
+            == "MFKFINRFLNLKKRYFYIFLINFFYFFNKCNFIKKKKIYKKIITKKFENYLLKLIIQKYAK"
+        )
+
     def test_cdna_creation(self):
         g = FileBasedGenome(
             "Candidatus_carsonella",
             data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz",
             data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz",
             None,
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz",
         )
         g.download_genome()
         g.job_transcripts()
@@ -85,7 +95,7 @@ class TestFilebased:
             for k in should:
                 assert actual[k] == should[k]
 
-    def test_empty_gtf_and_cdna(self):
+    def test_empty_gtf_and_cdna_and_protein(self):
         g = FileBasedGenome(
             "Candidatus_carsonella",
             data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz",
@@ -97,10 +107,50 @@ class TestFilebased:
         assert g.cdna_fasta_filename is None
         g.job_transcripts()
         g.job_genes()
+        g.job_proteins()
         ppg.run_pipegraph()
         assert len(g.df_transcripts) == 0
         assert len(g.get_gtf()) == 0
         assert len(g.df_genes) == 0
+        assert len(g.df_proteins) == 0
+
+    def test_protein_creation(self):
+        g = FileBasedGenome(
+            "Candidatus_carsonella",
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz",
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz",
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz",
+            None,
+            ProkaryoticCode(),
+        )
+        g.download_genome()
+        g.job_transcripts()
+        ppg.run_pipegraph()
+
+        should = dict(
+            iter_fasta(
+                data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"
+            )
+        )
+        should = {k[: k.find(b" ")]: v for (k, v) in should.items()}
+        actual = dict(iter_fasta(g.find_file("pep.fasta")))
+        if actual != should:
+            assert not set(should.keys()).difference(
+                set(actual.keys())
+            )  # they are all here, we just have more (tRNA...)
+            for k in should:
+                if actual[k] != should[k]:
+                    print(k)
+                    print(len(actual[k]))
+                    print(len(should[k]))
+
+                    print(actual[k])
+                    print(should[k])
+                    # print(g.get_cds_sequence(k.decode('utf-8')))
+                # else:
+                # print('ok', k)
+                # assert actual[k] == should[k]
+            assert False
 
     def test_job_creating_fasta(self, new_pipegraph):
         new_pipegraph.quiet = False
@@ -120,6 +170,7 @@ class TestFilebased:
             fasta_job,
             data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz",
             None,
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz",
         )
         g.download_genome()
         ppg.run_pipegraph()
@@ -162,7 +213,8 @@ class TestFilebased:
                 tf.name,
             ],
             data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz",
-            None,
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz",
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz",
         )
         g.download_genome()
         ppg.run_pipegraph()
