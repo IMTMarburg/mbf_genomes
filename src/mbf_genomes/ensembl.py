@@ -4,6 +4,7 @@ import mbf_externals
 from mbf_externals.util import download_file_and_gunzip, lazy_property, get_page
 from .base import GenomeBase, include_in_downloads, class_with_downloads
 import pypipegraph as ppg
+from .common import EukaryoticCode
 
 
 @class_with_downloads
@@ -20,6 +21,7 @@ class EnsemblGenome(GenomeBase):
         self.revision = str(int(revision))
         self.name = f"{self.species}_{self.revision}"
         ppg.util.assert_uniqueness_of_object(self)
+        self.genetic_code = EukaryoticCode
 
     @include_in_downloads
     def _pb_find_server(self):
@@ -66,9 +68,34 @@ class EnsemblGenome(GenomeBase):
             "genes.gtf",
         )
 
+    def get_additional_gene_gtfs(self):
+        if self.species == "Homo_sapiens":
+            if int(self.revision) <= 74:
+                return [
+                    Path(__file__).parent.parent.parent
+                    / "data"
+                    / "ribosomal_genes_grch37.gtf.gz.full.gtf.gz"
+                ]
+            else:
+                return [
+                    Path(__file__).parent.parent.parent
+                    / "data"
+                    / "ribosomal_genes_grch38.gtf.gz.full.gtf.gz"
+                ]
+        elif self.species == "Mus_musculus":
+            if int(self.revision) > 67:
+                return [
+                    Path(__file__).parent.parent.parent
+                    / "data"
+                    / "ribosomal_genes_mm10.gtf.gz.full.gtf.gz"
+                ]
+        return []
+
     @property
     def gtf_dependencies(self):
-        return self._pb_download_gtf()
+        return self._pb_download_gtf() + [
+            ppg.FileInvariant(p) for p in self.get_additional_gene_gtfs()
+        ]
 
     @include_in_downloads
     def _pb_download_genome_fasta(self):
@@ -108,7 +135,6 @@ class EnsemblGenome(GenomeBase):
             raw = get_page(real_url)
             if not raw:  # pragma: no cover
                 raise ValueError("Retrieving url failed: %s" % real_url)
-            found = False
             for aregexps in regexps:
                 matches = re.findall(aregexps, raw)
                 if len(matches) == 1:
@@ -116,10 +142,9 @@ class EnsemblGenome(GenomeBase):
                     download_file_and_gunzip(
                         real_url + matches[0], output_path / output_filename
                     )
-                    found = True
                     break
-            if not found:
-                raise ValueError(
+            else:
+                raise ValueError(  # pragma: no cover - defensive
                     "Found either too few or too many for every regexps. \nRaw was %s"
                     % (raw,)
                 )

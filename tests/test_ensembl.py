@@ -32,6 +32,7 @@ class TestEnsembl:
         )
         test_fasta_job.depends_on(g.download_genome())
         g._prebuilds.append(test_fasta_job)
+        g.job_proteins()
 
         subread = Subread(version="1.6.3")
         index = g.build_index(subread, "test.fasta")
@@ -94,6 +95,7 @@ class TestEnsembl:
             shorten_genome_fasta,
         )
         g._prebuilds.append(test_fasta_job)
+        g.job_proteins()
 
         subread_intermediate = Subread(version="1.5.0")
         index_intermediate = g.build_index(subread_intermediate, "test.fasta")
@@ -125,6 +127,21 @@ class TestEnsembl:
             == "MFSTRICSLLARPFMVPIVPRFGSALLQKPLNGVVVPQFTRGFKVRTSVKKFCAHCYIVR"
             "RKGRVYVYCKSNNKHKQRQG"
         )
+        assert (
+            g.genetic_code.translate_dna(g.get_cds_sequence("AAS53315"))
+            == "MFSTRICSLLARPFMVPIVPRFGSALLQKPLNGVVVPQFTRGFKVRTSVKKFCAHCYIVR"
+            "RKGRVYVYCKSNNKHKQRQG"
+        )
+
+        assert (
+            g.genetic_code.translate_dna(
+                g.get_cds_sequence("AAS53315", g.df_proteins.ix["AAS53315"])
+            )
+            == "MFSTRICSLLARPFMVPIVPRFGSALLQKPLNGVVVPQFTRGFKVRTSVKKFCAHCYIVR"
+            "RKGRVYVYCKSNNKHKQRQG"
+        )
+        with pytest.raises(ValueError):
+            g.get_cds_sequence("AAS53315", g.df_proteins.ix["AAS53316"])
 
     def test_download_jobs_called_by_index(self, new_pipegraph, mock_download):
         p = Path("prebuild")
@@ -137,7 +154,7 @@ class TestEnsembl:
         subread = Subread(version="1.6.3")
         with pytest.raises(OSError):
             g.find_prebuild("genome.fasta")
-        index = g.build_index(subread)
+        g.build_index(subread)
         g.find_prebuild("genome.fasta")
 
     def test_species_formating(self,):
@@ -171,7 +188,9 @@ class TestEnsembl:
         ppg.run_pipegraph()
 
         df = g.df_genes
+        df2 = g.df_genes  # caching
         assert len(df) == 6910
+        assert df is df2
         assert df.loc["UMAG_12015"].strand == 1
         assert df.loc["UMAG_12015"].tss == 4370
         assert df.loc["UMAG_12015"].tes == 5366
@@ -220,3 +239,21 @@ class TestEnsembl:
 
         df = g.df_proteins
         assert df.strand.isin([1, -1]).all()
+
+    def test_get_additional_gene_gtfs(self):
+        p = Path("prebuild")
+        p.mkdir()
+        pb = PrebuildManager(p)
+        g = EnsemblGenome("Ustilago_maydis", 33, pb)
+        assert len(g.get_additional_gene_gtfs()) == 0
+        g = EnsemblGenome("Homo_sapiens", 74, pb)
+        assert "ribosomal_genes_grch37" in g.get_additional_gene_gtfs()[0].name
+        assert g.get_additional_gene_gtfs()[0].exists()
+        g = EnsemblGenome("Homo_sapiens", 75, pb)
+        assert "ribosomal_genes_grch38" in g.get_additional_gene_gtfs()[0].name
+        assert g.get_additional_gene_gtfs()[0].exists()
+        g = EnsemblGenome("Mus_musculus", 68, pb)
+        assert "ribosomal_genes_mm10" in g.get_additional_gene_gtfs()[0].name
+        assert g.get_additional_gene_gtfs()[0].exists()
+        g = EnsemblGenome("Mus_musculus", 67, pb)
+        assert len(g.get_additional_gene_gtfs()) == 0

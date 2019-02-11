@@ -127,7 +127,7 @@ class GenomeBase(ABC):
         for j in self._download_jobs:
             result.append(j)
         for j in result:
-            if not j in self._prebuilds:
+            if not j in self._prebuilds:  # pragma: no branch
                 self._prebuilds.append(j)
         return result
 
@@ -145,9 +145,10 @@ class GenomeBase(ABC):
                     if Path(f).name == name:
                         return Path(f)
         # now search for undeclared, but created files
-        # mostly for aligners, where we only track the sentinels
+        # mostly for aligners, where we only track the sentinels, not the index
+        # files
         for job in self._prebuilds:
-            if hasattr(job, "name_file"):
+            if hasattr(job, "name_file"):  # pragma: no branch
                 if job.name_file(name).exists():
                     return job.name_file(name)
         raise OSError(f"File not found: {name}")
@@ -170,9 +171,9 @@ class GenomeBase(ABC):
         raise OSError(f"File not found: {name}")
 
     def build_index(self, aligner, fasta_to_use=None, gtf_to_use=None):
-        if fasta_to_use is None:
+        if fasta_to_use is None:  # pragma: no cover
             fasta_to_use = "genome.fasta"
-        if gtf_to_use is None:
+        if gtf_to_use is None:  # pragma: no cover
             gtf_to_use = "genes.gtf"
         name = Path(fasta_to_use).stem
 
@@ -220,12 +221,14 @@ class GenomeBase(ABC):
         """Get the coding sequence (rna) of a protein"""
         if protein_info is None:
             protein_info = self.df_proteins.loc[protein_id]
+        elif protein_info.name != protein_id:
+            raise ValueError("protein_id != protein_info['protein_id']")
         cdna = ""
         chr = protein_info["chr"]
         for start, stop in protein_info["cds"]:
             cdna += self.get_genome_sequence(chr, start, stop)
-        if protein_info["strand"] not in (1, -1):
-            raise ValueError(protein_info["strand"])
+        if protein_info["strand"] not in (1, -1):  # pragma: no cover
+            raise ValueError(f'{protein_info["strand"]} was not 1/-1')
         if protein_info["strand"] == -1:
             cdna = reverse_complement(cdna)
         return cdna
@@ -236,10 +239,16 @@ class GenomeBase(ABC):
             return f.fetch(protein_id)
 
     def get_gtf(self):
-        gtf_filename = self.find_file("genes.gtf")
-        if gtf_filename is None:
-            return pd.DataFrame({})
-        return gtfparse.read_gtf(gtf_filename)
+        filenames = [self.find_file("genes.gtf")]
+        if hasattr(self, "get_additional_gene_gtfs"):
+            filenames.extend(self.get_additional_gene_gtfs())
+        dfs = []
+        for gtf_filename in filenames:
+            if gtf_filename is None:
+                dfs.append(pd.DataFrame({}))
+            else:
+                dfs.append(gtfparse.read_gtf(gtf_filename))
+        return pd.concat(dfs)
 
     def _prepare_df_genes(self):
         """Return a DataFrame with  gene information:

@@ -45,22 +45,17 @@ def iter_fasta(filenameOrFileLikeObject, keyFunc=None, block_size=None):
     o = open_file(filenameOrFileLikeObject)
     key = ""
     for chunk in chunkify(o, b"\n>", block_size=block_size):
-        if chunk:
-            key = chunk[: chunk.find(b"\n")].strip()
-            if key.startswith(b">"):
-                key = key[1:]
-            if keyFunc:
-                key = keyFunc(key)
-            if chunk.find(b"\n") != -1:
-                seq = (
-                    chunk[chunk.find(b"\n") + 1 :]
-                    .replace(b"\r", b"")
-                    .replace(b"\n", b"")
-                )
-            else:
-                raise ValueError("Should not be reached")  # pragma: no cover
-                # seq = b""
-            yield (key, seq)
+        key = chunk[: chunk.find(b"\n")].strip()
+        if key.startswith(b">"):
+            key = key[1:]
+        if keyFunc:
+            key = keyFunc(key)
+        if chunk.find(b"\n") != -1:
+            seq = chunk[chunk.find(b"\n") + 1 :].replace(b"\r", b"").replace(b"\n", b"")
+        else:
+            raise ValueError("Should not be reached")  # pragma: no cover
+            # seq = b""
+        yield (key, seq)
     return
 
 
@@ -152,13 +147,14 @@ universal_genenetic_code = {
 
 
 class GeneticCode(ABC):
-    def translate_dna(self, sequence, raise_on_non_multiple_of_three=True):
+    @classmethod
+    def translate_dna(cls, sequence, raise_on_non_multiple_of_three=True):
         if raise_on_non_multiple_of_three and len(sequence) % 3 != 0:
             raise ValueError("len(sequence) was not a multiple of 3")
-        genetic_code = self.genetic_code
+        genetic_code = cls.genetic_code
         proteinseq = ""
         sequence = sequence.upper()
-        if sequence[:3] in self.start_codons:
+        if sequence[:3] in cls.start_codons:
             proteinseq += "M"
         else:
             proteinseq += genetic_code[sequence[:3]]
@@ -166,26 +162,30 @@ class GeneticCode(ABC):
             proteinseq += genetic_code[sequence[n : n + 3]]
         return proteinseq
 
-    def translate_dna_till_stop(self, sequence, genetic_code=None):
-        genetic_code = self.genetic_code
+    @classmethod
+    def translate_dna_till_stop(cls, sequence, genetic_code=None):
+        genetic_code = cls.genetic_code
         proteinseq = ""
         sequence = sequence.upper()
         sequence = sequence.upper()
-        if sequence[:3] in self.start_codons:
+        if sequence[:3] in cls.start_codons:
             proteinseq += "M"
         else:
             proteinseq += genetic_code[sequence[:3]]
-        for n in range(3, len(sequence), 3):
+        for n in range(3, len(sequence), 3):  # pragma: no branch
             try:
-                x = genetic_code[sequence[n : n + 3]]
+                codon = sequence[n : n + 3]
+                x = genetic_code[codon]
                 proteinseq += x
                 if x == "*":
                     break
             except KeyError:
-                if n + 3 < len(sequence):
-                    raise
+                if len(codon) < 3:
+                    raise ValueError("No stop codon found")
                 else:
-                    break
+                    raise NotImplementedError(
+                        "Incomplete genetic code?, codon %s not found" % codon
+                    )
         return proteinseq
 
 
