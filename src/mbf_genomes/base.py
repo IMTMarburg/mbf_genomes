@@ -194,8 +194,14 @@ class GenomeBase(ABC):
             minimum_acceptable_version=min_ver,
             maximum_acceptable_version=max_ver,
         )
-        job.depends_on(self.find_prebuild(fasta_to_use))
-        job.depends_on(self.find_prebuild(gtf_to_use))
+        try:
+            job.depends_on(self.find_prebuild(fasta_to_use))
+            job.depends_on(self.find_prebuild(gtf_to_use))
+        except OSError:
+            self.download_genome()  # so that the jobs are there
+            job.depends_on(self.find_prebuild(fasta_to_use))
+            job.depends_on(self.find_prebuild(gtf_to_use))
+
         return job
 
     def get_chromosome_lengths(self):

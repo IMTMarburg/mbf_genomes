@@ -11,7 +11,7 @@ class EnsemblGenome(GenomeBase):
     def __init__(self, species, revision, prebuild_manager=None):
         super().__init__()
         if prebuild_manager is None:  # pragma: no cover
-            prebuild_manager = mbf_externals.prebuild.global_manager
+            prebuild_manager = mbf_externals.get_global_manager()
         self.prebuild_manager = prebuild_manager
 
         self.species = species
@@ -62,7 +62,7 @@ class EnsemblGenome(GenomeBase):
         return self._pb_download(
             "gtf",
             "gtf/" + self.species.lower() + "/",
-            fr"{self.species}\..+\.{self.revision}.gtf.gz",
+            (fr"{self.species}\..+\.{self.revision}.gtf.gz",),
             "genes.gtf",
         )
 
@@ -75,7 +75,10 @@ class EnsemblGenome(GenomeBase):
         return self._pb_download(
             "dna",
             "fasta/" + self.species.lower() + "/dna/",
-            fr"{self.species}\..+\.dna.toplevel.fa.gz",
+            (
+                fr"{self.species}\..+\.dna.primary_assembly.fa.gz",
+                fr"{self.species}\..+\.dna.toplevel.fa.gz",
+            ),
             "genome.fasta",
         )
 
@@ -84,7 +87,7 @@ class EnsemblGenome(GenomeBase):
         return self._pb_download(
             "cdna",
             "fasta/" + self.species.lower() + "/cdna/",
-            fr"{self.species}\..+\.cdna.all.fa.gz",
+            (fr"{self.species}\..+\.cdna.all.fa.gz",),
             "cdna.fasta",
         )
 
@@ -93,26 +96,34 @@ class EnsemblGenome(GenomeBase):
         return self._pb_download(
             "pep",
             f"fasta/{self.species.lower()}/pep/",
-            fr"{self.species}\..+\.pep.all.fa.gz",
+            (fr"{self.species}\..+\.pep.all.fa.gz",),
             "pep.fasta",
         )
 
     def _pb_download(self, pb_name, url, regexps, output_filename):
+        """regexps may be multiple - then the first one matching is used"""
+
         def do_download(output_path):
             real_url = self.base_url + url
             raw = get_page(real_url)
             if not raw:  # pragma: no cover
                 raise ValueError("Retrieving url failed: %s" % real_url)
-            matches = re.findall(regexps, raw)
-            if len(matches) != 1:  # pragma: no cover
+            found = False
+            for aregexps in regexps:
+                matches = re.findall(aregexps, raw)
+                if len(matches) == 1:
+                    Path(output_filename + ".url").write_text((real_url + matches[0]))
+                    download_file_and_gunzip(
+                        real_url + matches[0], output_path / output_filename
+                    )
+                    found = True
+                    break
+            if not found:
                 raise ValueError(
-                    "Found wrong number of matches for regexps: %s. \nRaw was %s"
-                    % (matches, raw)
+                    "Found either too few or too many for every regexps. \nRaw was %s"
+                    % (raw,)
                 )
-            print(real_url + matches[0])
-            download_file_and_gunzip(
-                real_url + matches[0], output_path / output_filename
-            )
+
             if Path(output_filename).suffix == ".fasta":
                 import pysam
 

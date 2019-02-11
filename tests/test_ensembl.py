@@ -126,6 +126,20 @@ class TestEnsembl:
             "RKGRVYVYCKSNNKHKQRQG"
         )
 
+    def test_download_jobs_called_by_index(self, new_pipegraph, mock_download):
+        p = Path("prebuild")
+        p.mkdir()
+        pb = PrebuildManager(p)
+        species = (
+            "Ashbya_gossypii"
+        )  # the smallest eukaryotic species at the time of writing this at 2.8 mb
+        g = EnsemblGenome(species, "41", prebuild_manager=pb)
+        subread = Subread(version="1.6.3")
+        with pytest.raises(OSError):
+            g.find_prebuild("genome.fasta")
+        index = g.build_index(subread)
+        g.find_prebuild("genome.fasta")
+
     def test_species_formating(self,):
         p = Path("prebuild")
         p.mkdir()
