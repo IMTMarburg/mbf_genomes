@@ -190,27 +190,3 @@ class EnsemblGenome(GenomeBase):
         )
         self._prebuilds.append(j)
         return j
-
-    def job_transcripts(self):
-        def dump(output_filename):
-            df = self._prepare_df_transcripts()
-            df.to_msgpack(output_filename / "df_transcripts.msgpack")
-
-        j = self.prebuild_manager.prebuild(
-            f"ensembl/{self.species}_{self.revision}/transcripts_msgpack",
-            # we don't use the version for this, since we need it for building
-            # various aligner versioned indices
-            "1",
-            [],
-            ["df_transcripts.msgpack"],
-            dump,
-        )
-        j.depends_on(
-            ppg.FunctionInvariant(
-                Path("EnsemblGenome") / self.name / "df_transcripts.msgpack" / "func",
-                self.__class__._prepare_df_transcripts,
-            ),
-            self._pb_download_gtf(),
-        )
-        self._prebuilds.append(j)
-        return j

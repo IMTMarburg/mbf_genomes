@@ -1,41 +1,6 @@
-from pathlib import Path
 from abc import ABC
 
-
-def open_file(fileNameOrHandle, mode="rb"):
-    """Transparently open compressed or uncompressed files"""
-    if hasattr(fileNameOrHandle, "read"):
-        return fileNameOrHandle
-    elif isinstance(fileNameOrHandle, Path):
-        fileNameOrHandle = str(fileNameOrHandle)
-    if fileNameOrHandle.endswith(".gz"):
-        import gzip
-
-        return gzip.GzipFile(fileNameOrHandle, mode)
-    elif fileNameOrHandle.endswith(".bz2"):
-        import bz2
-
-        return bz2.BZ2File(fileNameOrHandle, mode)
-    else:
-        return open(fileNameOrHandle, mode)
-
-
-def chunkify(handle, separator, block_size=None):
-    """take a file handle and split it at separator, reading in efficently in 50 mb blocks or so"""
-    if block_size is None:
-        block_size = 50 * 1024 * 1024
-    chunk = handle.read(block_size)
-    chunk = chunk.split(separator)
-    while True:
-        for k in chunk[:-1]:
-            yield k
-        next = handle.read(block_size)
-        if next:
-            chunk = chunk[-1] + next
-            chunk = chunk.split(separator)
-        else:
-            yield chunk[-1]
-            break
+from mbf_fileformats.util import open_file, chunkify
 
 
 def iter_fasta(filenameOrFileLikeObject, keyFunc=None, block_size=None):
@@ -71,11 +36,21 @@ def wrappedIterator(width):
 
 
 rc_table = str.maketrans("agctAGCT", "tcgaTCGA")
+iupac_forward = "ACGTRYMKSWBDHVN"
+iupac_reverse = "TGCAYRKMSWVHDBN"
+iupac_rc_table = str.maketrans(
+    iupac_forward + iupac_forward.upper(), iupac_reverse + iupac_reverse.upper()
+)
 
 
 def reverse_complement(s):
     """return complementary, reversed sequence to x (keeping case)"""
     return s.translate(rc_table)[::-1]
+
+
+def reverse_complement_iupac(s):
+    """return complementary, reversed sequence to x (keeping case)"""
+    return s.translate(iupac_rc_table)[::-1]
 
 
 universal_genenetic_code = {

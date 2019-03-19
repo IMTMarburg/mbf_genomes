@@ -15,6 +15,8 @@ class FileBasedGenome(GenomeBase):
         cdna_fasta_file=None,
         protein_fasta_file=None,
         genetic_code=EukaryoticCode,
+        cache_dir=None,
+        ignore_code_changes=False,
     ):
         """
         Parameters
@@ -31,10 +33,16 @@ class FileBasedGenome(GenomeBase):
         super().__init__()
         self.name = name
         ppg.assert_uniqueness_of_object(self)
+        self.ignore_code_changes = ignore_code_changes
         self.genetic_code = genetic_code
-        self.cache_dir = (
-            Path(ppg.util.global_pipegraph.cache_folder) / "FileBasedGenome" / self.name
-        )
+        if cache_dir is None:
+            self.cache_dir = (
+                Path(ppg.util.global_pipegraph.cache_folder)
+                / "FileBasedGenome"
+                / self.name
+            )
+        else:
+            self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         self.genome_fasta_filename = self.cache_dir / "dna" / "genome.fasta"
@@ -73,6 +81,7 @@ class FileBasedGenome(GenomeBase):
             "genome.fasta": self.genome_fasta_filename,
             "cdna.fasta": self.cdna_fasta_filename,
             "genes.gtf": self.gtf_filename,
+            "proteins.fasta": self.protein_fasta_filename,
         }
 
     def prep_fasta(self, input_filenames, output_filename):
@@ -105,6 +114,8 @@ class FileBasedGenome(GenomeBase):
 
         Path(output_filename).parent.mkdir(exist_ok=True)
         job = ppg.FileGeneratingJob(output_filename, prep)
+        if self.ignore_code_changes:
+            job.ignore_code_changes()
         job.depends_on(deps)
         self._download_jobs.append(job)
         return job
@@ -131,6 +142,8 @@ class FileBasedGenome(GenomeBase):
         job = ppg.FileGeneratingJob(self.cdna_fasta_filename, create).depends_on(
             self.job_transcripts(), self.genome_fasta_dependencies
         )
+        if self.ignore_code_changes:
+            job.ignore_code_changes()
         self._download_jobs.append(job)
         return job
 
@@ -151,6 +164,8 @@ class FileBasedGenome(GenomeBase):
         job = ppg.FileGeneratingJob(self.protein_fasta_filename, create).depends_on(
             self.job_proteins(), self.genome_fasta_dependencies
         )
+        if self.ignore_code_changes:
+            job.ignore_code_changes()
         self._download_jobs.append(job)
         return job
 
@@ -169,5 +184,72 @@ class FileBasedGenome(GenomeBase):
         j = ppg.FileGeneratingJob(out_dir / filename, dump).depends_on(
             ppg.FunctionInvariant(out_dir / filename / property_name, callback_function)
         )
+        if self.ignore_code_changes:
+            j.ignore_code_changes()
         self._prebuilds.append(j)
         return j
+
+
+@class_with_downloads
+class InteractiveFileBasedGenome(GenomeBase):
+    def __init__(
+        self,
+        name,
+        genome_fasta_filename,
+        cdna_fasta_filename,
+        protein_fasta_filename,
+        gtf_filename,
+        cache_dir,
+    ):
+        """
+        A FileBasedGenome used for interactive work,
+        uses files that a FileBasedGenome has created in a previous ppg run.
+        """
+        super().__init__()
+        self.name = name
+        self.cache_dir = Path(cache_dir)
+
+        self.genome_fasta_filename = genome_fasta_filename
+        self.cdna_fasta_filename = cdna_fasta_filename
+        self.protein_fasta_filename = protein_fasta_filename
+        self.gtf_filename = gtf_filename
+
+        self._filename_lookups = {
+            "genome.fasta": self.genome_fasta_filename,
+            "cdna.fasta": self.cdna_fasta_filename,
+            "protein.fasta": self.protein_fasta_filename,
+            "genes.gtf": self.gtf_filename,
+            'df_genes.msgpack': self.cache_dir / 'lookup' / 'df_genes.msgpack',
+            'df_transcripts.msgpack': self.cache_dir / 'lookup' / 'df_transcripts.msgpack',
+        }
+        self.ignore_code_changes = False
+
+        if ppg.util.inside_ppg():
+            self.gtf_dependencies = ppg.FileInvariant(self.gtf_filename)
+        else:
+            self.gtf_dependencies = []
+
+    def _msg_pack_job(self, property_name, filename, callback_function):
+        if not ppg.util.inside_ppg():
+            if not Path(filename).exists():
+                df = callback_function()
+                df.to_msgpack(filename)
+        else:
+            out_dir = self.cache_dir / "lookup"
+            out_dir.mkdir(exist_ok=True)
+
+            def dump(output_filename):
+                df = callback_function(self)
+                df.to_msgpack(output_filename)
+
+            j = ppg.FileGeneratingJob(out_dir / filename, dump).depends_on(
+                ppg.FunctionInvariant(
+                    out_dir / filename / property_name, callback_function
+                )
+            )
+            if self.ignore_code_changes:
+                j.ignore_code_changes()
+            self._prebuilds.append(j)
+            return j
+
+        return

@@ -135,13 +135,13 @@ class TestEnsembl:
 
         assert (
             g.genetic_code.translate_dna(
-                g.get_cds_sequence("AAS53315", g.df_proteins.ix["AAS53315"])
+                g.get_cds_sequence("AAS53315", g.df_proteins.loc["AAS53315"])
             )
             == "MFSTRICSLLARPFMVPIVPRFGSALLQKPLNGVVVPQFTRGFKVRTSVKKFCAHCYIVR"
             "RKGRVYVYCKSNNKHKQRQG"
         )
         with pytest.raises(ValueError):
-            g.get_cds_sequence("AAS53315", g.df_proteins.ix["AAS53316"])
+            g.get_cds_sequence("AAS53315", g.df_proteins.loc["AAS53316"])
 
     def test_download_jobs_called_by_index(self, new_pipegraph, mock_download):
         p = Path("prebuild")
@@ -211,7 +211,7 @@ class TestEnsembl:
         pb = PrebuildManager(p)
         g = EnsemblGenome("Ustilago_maydis", 33, pb)
         g.download_genome()
-        g.job_transcripts()
+        assert isinstance(g.job_transcripts(), ppg.Job)
         ppg.run_pipegraph()
 
         df = g.df_transcripts

@@ -5,6 +5,7 @@ import gtfparse
 from dppd import dppd
 import pysam
 from .common import reverse_complement
+from .gene import Gene, Transcript
 
 dp, X = dppd()
 
@@ -29,6 +30,23 @@ def class_with_downloads(cls):
         if hasattr(f[1], "_include_in_downloads"):
             cls._download_methods.append(f[1])
     return cls
+
+
+def ReadOnlyPropertyWithFunctionAccess(func):
+    """With normal property, you can not (easily) retrieve
+    the function. This will return the value of the func
+    if you do x.prop and the func itsealf if you do type(x).prop
+    """
+
+    class Property:
+        def __get__(self, inst, instcls):
+            if inst is None:
+                # instance attribute accessed on class, return self
+                return func
+            else:
+                return func(inst)
+
+    return Property()
 
 
 class MsgPackProperty:
@@ -66,16 +84,16 @@ def msgpack_unpacking_class(cls):
             filename = d + ".msgpack"
             calc_func = getattr(cls, f"_prepare_{d}")
 
-            def load(self, d=d, filename=filename):
-                if not hasattr(self, "__" + d):
+            def load(self, d=d, filename=filename, job_name=job_name):
+                if not hasattr(self, "_" + d):
                     fn = self.find_file(filename)
                     if not fn.exists():
                         raise ValueError(
                             f"{d} accessed before the respecting {job_name} call"
                         )
                     df = pd.read_msgpack(fn)
-                    setattr(self, "__" + d, df)
-                return getattr(self, "__" + d)
+                    setattr(self, "_" + d, df)
+                return getattr(self, "_" + d)
 
             p = property(load)
             p.__doc__ == calc_func.__doc__
@@ -90,7 +108,8 @@ def msgpack_unpacking_class(cls):
                     dependency_callback=v.dependency_callback,
                 ):
                     j = self._msg_pack_job(d, filename, calc_func)
-                    j.depends_on(dependency_callback(self))
+                    if j is not None:
+                        j.depends_on(dependency_callback(self))
                     return j
 
                 setattr(cls, job_name, gen_job)
@@ -248,7 +267,51 @@ class GenomeBase(ABC):
                 dfs.append(pd.DataFrame({}))
             else:
                 dfs.append(gtfparse.read_gtf(gtf_filename))
-        return pd.concat(dfs)
+        return pd.concat(dfs, sort=False)
+
+    def gene(self, gene_stable_id):
+        return Gene(self, gene_stable_id)
+
+    def transcript(self, transcript_stable_id):
+        return Transcript(self, transcript_stable_id)
+
+    @property
+    def genes(self):
+        for gene_stable_id in self.df_genes.index:
+            yield self.gene(gene_stable_id)
+
+    @property
+    def transcripts(self):
+        for transcript_stable_id in self.df_transcripts.index:
+            yield self.transcript(transcript_stable_id)
+
+    @ReadOnlyPropertyWithFunctionAccess
+    def df_exons(self):
+        """a dataframe of all exons"""
+        res = {
+            "chr": [],
+            "start": [],
+            "stop": [],
+            "transcript_stable_id": [],
+            "gene_stable_id": [],
+            "strand": [],
+        }
+        canonical_chromosomes = self.get_chromosome_lengths()
+        for (transcript_stable_id, transcript_row) in self.df_transcripts[
+            ["gene_stable_id", "chr", "strand"]
+        ].iterrows():
+            if not transcript_row["chr"] in canonical_chromosomes:
+                continue
+            tr = self.transcript(transcript_stable_id)
+            exons = tr.exons
+            for start, stop in exons:
+                res["chr"].append(transcript_row["chr"])
+                res["start"].append(start)
+                res["stop"].append(stop)
+                res["transcript_stable_id"].append(transcript_stable_id)
+                res["gene_stable_id"].append(transcript_row["gene_stable_id"])
+                res["strand"].append(transcript_row["strand"])
+        return pd.DataFrame(res)
 
     def _prepare_df_genes(self):
         """Return a DataFrame with  gene information:
@@ -281,7 +344,7 @@ class GenomeBase(ABC):
         transcripts = (
             df[df.feature == "transcript"]
             .set_index("gene_id")
-            .sort_values(["start", "end"])
+            .sort_values(["seqname", "start", "end"])
         )
         genes = (
             dp(genes)
@@ -296,9 +359,12 @@ class GenomeBase(ABC):
                 tes=(genes.end).where(genes.strand == "+", genes.start - 1),
                 biotype=pd.Categorical(X.gene_biotype),
             )
+            .sort_values(["chr", "start"])
             .set_index("gene_stable_id")
             .pd
         )
+        if not genes.index.is_unique:
+            raise ValueError("gene_stable_ids were not unique")
         tr = {}
         for gene_stable_id, transcript_stable_id in transcripts[
             "transcript_id"
@@ -309,7 +375,16 @@ class GenomeBase(ABC):
         genes = genes.assign(
             transcript_stable_ids=pd.Series(list(tr.values()), index=list(tr.keys()))
         )
+        self.sanity_check_genes(genes)
         return genes
+
+    def sanity_check_genes(self, df_genes):
+        strand_values = set(df_genes.strand.unique())
+        if strand_values.difference([1, -1]):
+            raise ValueError(f"Gene strand was outside of 1, -1: {strand_values}")
+        wrong_order = df_genes["start"] > df_genes["stop"]
+        if wrong_order.any():
+            raise ValueError("start > stop %s" % df_genes[wrong_order].head())
 
     def _prepare_df_transcripts(self):
         """Get a DataFrame with all the transcript information
@@ -318,29 +393,33 @@ class GenomeBase(ABC):
             name,
             chr, start, stop, strand,
             biotype,
-            exons  - list (start, stop, phase)
+            exons  - list (start, stop)
         """
         df = self.get_gtf()
         if len(df) == 0:
-            df = pd.DataFrame(
-                {
-                    "transcript_stable_id": [],
-                    "gene_stable_id": [],
-                    "name": [],
-                    "chr": [],
-                    "start": [],
-                    "stop": [],
-                    "strand": [],
-                    "biotype": [],
-                    "exons": [],
-                    "exon_stable_ids": [],
-                    "translation_start": [],
-                    "translation_start_exon": [],
-                    "translation_stop": [],
-                    "translation_stop_exon": [],
-                    "protein_id": [],
-                }
-            ).set_index("transcript_stable_id")
+            df = (
+                pd.DataFrame(
+                    {
+                        "transcript_stable_id": [],
+                        "gene_stable_id": [],
+                        "name": [],
+                        "chr": [],
+                        "start": [],
+                        "stop": [],
+                        "strand": [],
+                        "biotype": [],
+                        "exons": [],
+                        "exon_stable_ids": [],
+                        "translation_start": [],
+                        "translation_start_exon": [],
+                        "translation_stop": [],
+                        "translation_stop_exon": [],
+                        "protein_id": [],
+                    }
+                )
+                .set_index("transcript_stable_id")
+                .sort_values(["chr", "start"])
+            )
             return df
         transcripts = df[df.feature == "transcript"]
         all_exons = (
@@ -362,6 +441,9 @@ class GenomeBase(ABC):
             .set_index("transcript_stable_id")
             .pd
         )
+
+        if not result.index.is_unique:
+            raise ValueError("transcript_stable_ids were not unique")
         result_exons = {}
         result_exon_ids = {}
         for transcript_stable_id, exon in all_exons.iterrows():
@@ -379,7 +461,29 @@ class GenomeBase(ABC):
             list(result_exon_ids.values()), index=list(result_exon_ids.keys())
         )
         result = result.assign(exons=result_exons, exon_stable_ids=result_exon_ids)
+        self.sanity_check_transcripts(result)
         return result
+
+    def sanity_check_transcripts(self, df_transcripts):
+        strand_values = set(df_transcripts.strand.unique())
+        if strand_values.difference([1, -1]):
+            raise ValueError(f"Transcript strand was outside of 1, -1: {strand_values}")
+
+        for transcript_stable_id, row in df_transcripts.iterrows():
+            start = row["start"]
+            stop = row["stop"]
+            if start > stop:
+                raise ValueError("start > stop {row}")
+            for estart, estop in row["exons"]:
+                if estart < start or estop > stop:
+                    raise ValueError(
+                        f"Exon outside of transcript: {transcript_stable_id}"
+                    )
+            gene_info = self.df_genes.loc[row["gene_stable_id"]]
+            if start < gene_info["start"] or stop > gene_info["stop"]:
+                raise ValueError(
+                    f"Transcript outside of gene: {transcript_stable_id} {start} {stop} {gene_info['start']} {gene_info['stop']}"
+                )
 
     def _prepare_df_proteins(self):
         """Get a DataFrame with protein information
@@ -430,5 +534,22 @@ class GenomeBase(ABC):
         return result
 
     df_genes = MsgPackProperty(lambda self: self.gtf_dependencies)
-    df_transcripts = MsgPackProperty(lambda self: self.gtf_dependencies)
+    df_transcripts = MsgPackProperty(lambda self: [self.gtf_dependencies, self.job_genes()])
     df_proteins = MsgPackProperty(lambda self: self.gtf_dependencies)
+
+
+@class_with_downloads
+class HardCodedGenome(GenomeBase):
+    def __init__(self, name, chr_lengths, df_genes, df_transcripts, df_proteins):
+        super().__init__()
+        self.name = name
+        self._chr_lengths = chr_lengths
+        self._df_genes = df_genes
+        self._df_transcripts = df_transcripts
+        self._df_proteins = df_proteins
+
+    def get_chromosome_lengths(self):
+        return self._chr_lengths.copy()
+
+    def _msg_pack_job(self, property_name, filename, callback_function):
+        pass
