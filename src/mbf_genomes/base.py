@@ -1,7 +1,6 @@
 from pathlib import Path
 from abc import ABC, abstractmethod
 import pandas as pd
-import gtfparse
 from dppd import dppd
 import pysam
 from .common import reverse_complement
@@ -257,17 +256,29 @@ class GenomeBase(ABC):
         with pysam.FastaFile(str(self.find_file("pep.fasta"))) as f:
             return f.fetch(protein_id)
 
-    def get_gtf(self):
+    def get_gtf(self, features=[]):
+        import mbf_gtf
+        if isinstance(features, str):
+            features = [features]
+
         filenames = [self.find_file("genes.gtf")]
         if hasattr(self, "get_additional_gene_gtfs"):
             filenames.extend(self.get_additional_gene_gtfs())
-        dfs = []
+        dfs = {}
         for gtf_filename in filenames:
             if gtf_filename is None:
-                dfs.append(pd.DataFrame({}))
+                pass
             else:
-                dfs.append(gtfparse.read_gtf(gtf_filename))
-        return pd.concat(dfs, sort=False)
+                r = mbf_gtf.parse_ensembl_gtf(str(gtf_filename), list(features))
+                for k, df in r.items():
+                    if not k in dfs:
+                        dfs[k] = []
+                    dfs[k].append(df)
+        for k in features:
+            if not k in dfs:
+                dfs[k] = [pd.DataFrame({})]
+        result = {k: pd.concat(dfs[k], sort=False) for k in dfs}
+        return result
 
     def gene(self, gene_stable_id):
         return Gene(self, gene_stable_id)
@@ -325,8 +336,10 @@ class GenomeBase(ABC):
             tes
             biotype
         """
-        df = self.get_gtf()
-        if len(df) == 0:  # a genome without gene information
+        gtf = self.get_gtf(["gene", 'transcript'])
+        genes = gtf["gene"]
+        transcripts = gtf["transcript"]
+        if len(genes) == 0:  # a genome without gene information
             return pd.DataFrame(
                 {
                     "gene_stable_id": [],
@@ -340,11 +353,13 @@ class GenomeBase(ABC):
                     "biotype": [],
                 }
             )
-        genes = df[df.feature == "gene"]
-        transcripts = (
-            df[df.feature == "transcript"]
-            .set_index("gene_id")
-            .sort_values(["seqname", "start", "end"])
+        elif len(transcripts) == 0: # pragma: no cover
+            raise ValueError("Genome with gene but no transcript information "
+                             "not supported: len(genes) %i, len(transcripts) %i"
+                             % (len(genes), len(transcripts)))
+
+        transcripts = transcripts.set_index("gene_id").sort_values(
+            ["seqname", "start", "end"]
         )
         genes = (
             dp(genes)
@@ -354,9 +369,9 @@ class GenomeBase(ABC):
                 chr=pd.Categorical(X.seqname),
                 start=X.start - 1,
                 stop=X.end,
-                strand=normalize_strand(X.strand),
-                tss=(genes.start - 1).where(genes.strand == "+", genes.end),
-                tes=(genes.end).where(genes.strand == "+", genes.start - 1),
+                strand=X.strand,
+                tss=(genes.start - 1).where(genes.strand == 1, genes.end),
+                tes=(genes.end).where(genes.strand == 1, genes.start - 1),
                 biotype=pd.Categorical(X.gene_biotype),
             )
             .sort_values(["chr", "start"])
@@ -395,8 +410,10 @@ class GenomeBase(ABC):
             biotype,
             exons  - list (start, stop)
         """
-        df = self.get_gtf()
-        if len(df) == 0:
+        gtf = self.get_gtf(["transcript", "exon"])
+        transcripts = gtf["transcript"]
+        exons = gtf["exon"]
+        if len(transcripts) == 0:
             df = (
                 pd.DataFrame(
                     {
@@ -421,10 +438,7 @@ class GenomeBase(ABC):
                 .sort_values(["chr", "start"])
             )
             return df
-        transcripts = df[df.feature == "transcript"]
-        all_exons = (
-            df[df.feature == "exon"].set_index("transcript_id").sort_values("start")
-        )
+        all_exons = exons.set_index("transcript_id").sort_values("start")
 
         result = (
             dp(transcripts)
@@ -435,7 +449,7 @@ class GenomeBase(ABC):
                 chr=pd.Categorical(X.seqname),
                 start=X.start - 1,
                 stop=X.end,
-                strand=normalize_strand(X.strand),
+                strand=X.strand,
                 biotype=pd.Categorical(X.transcript_biotype),
             )
             .set_index("transcript_stable_id")
@@ -494,8 +508,9 @@ class GenomeBase(ABC):
             strand
             cds - [(start, stop)]  # in genomic coordinates
         """
-        df = self.get_gtf()
-        if len(df) == 0:
+        gtf = self.get_gtf(['CDS'])
+        cds = gtf["CDS"]
+        if len(cds) == 0:
             df = pd.DataFrame(
                 {
                     "protein_stable_id": [],
@@ -507,7 +522,6 @@ class GenomeBase(ABC):
                 }
             ).set_index("protein_stable_id")
             return df
-        cds = df[df.feature == "CDS"]
         result = {
             "protein_stable_id": [],
             "transcript_stable_id": [],
@@ -530,11 +544,12 @@ class GenomeBase(ABC):
             result["strand"].append(strand)
             result["cds"].append(cds)
         result = pd.DataFrame(result).set_index("protein_stable_id")
-        result = result.assign(strand=normalize_strand(result.strand))
         return result
 
     df_genes = MsgPackProperty(lambda self: self.gtf_dependencies)
-    df_transcripts = MsgPackProperty(lambda self: [self.gtf_dependencies, self.job_genes()])
+    df_transcripts = MsgPackProperty(
+        lambda self: [self.gtf_dependencies, self.job_genes()]
+    )
     df_proteins = MsgPackProperty(lambda self: self.gtf_dependencies)
 
 
