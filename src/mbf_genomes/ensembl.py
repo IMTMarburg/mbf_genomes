@@ -182,11 +182,6 @@ class EnsemblGenome(GenomeBase):
             [filename],
             dump,
         )
-        j.depends_on(
-            ppg.FunctionInvariant(
-                Path("EnsemblGenome") / self.name / property_name / "func",
-                callback_function,
-            )
-        )
+        j.depends_on_func(property_name, callback_function)
         self._prebuilds.append(j)
         return j

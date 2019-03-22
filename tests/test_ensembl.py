@@ -10,8 +10,8 @@ from pypipegraph.util import checksum_file
 @pytest.mark.usefixtures("new_pipegraph")
 class TestEnsembl:
     def test_download(self, new_pipegraph, mock_download):
-        p = Path("prebuild")
-        p.mkdir()
+        p = Path("../prebuild")
+        p.mkdir(exist_ok=True)
         pb = PrebuildManager(p)
         species = (
             "Ashbya_gossypii"
@@ -144,8 +144,8 @@ class TestEnsembl:
             g.get_cds_sequence("AAS53315", g.df_proteins.loc["AAS53316"])
 
     def test_download_jobs_called_by_index(self, new_pipegraph, mock_download):
-        p = Path("prebuild")
-        p.mkdir()
+        p = Path("../prebuild")
+        p.mkdir(exist_ok=True)
         pb = PrebuildManager(p)
         species = (
             "Ashbya_gossypii"
@@ -158,8 +158,8 @@ class TestEnsembl:
         g.find_prebuild("genome.fasta")
 
     def test_species_formating(self,):
-        p = Path("prebuild")
-        p.mkdir()
+        p = Path("../prebuild")
+        p.mkdir(exist_ok=True)
         pb = PrebuildManager(p)
         species = (
             "ashbya_gossypii"
@@ -168,8 +168,8 @@ class TestEnsembl:
             EnsemblGenome(species, "41", prebuild_manager=pb)
 
     def test_unknown_species_raises(self, mock_download):
-        p = Path("prebuild")
-        p.mkdir()
+        p = Path("../prebuild")
+        p.mkdir(exist_ok=True)
         pb = PrebuildManager(p)
         species = (
             "Unknown_unknown"
@@ -179,8 +179,8 @@ class TestEnsembl:
             ppg.run_pipegraph()
 
     def test_all_genes(self, mock_download):
-        p = Path("prebuild")
-        p.mkdir()
+        p = Path("../prebuild")
+        p.mkdir(exist_ok=True)
         pb = PrebuildManager(p)
         g = EnsemblGenome("Ustilago_maydis", 33, pb)
         g.download_genome()
@@ -206,8 +206,8 @@ class TestEnsembl:
         assert df["biotype"].dtype.name == "category"
 
     def test_all_transcripts(self, mock_download):
-        p = Path("prebuild")
-        p.mkdir()
+        p = Path("../prebuild")
+        p.mkdir(exist_ok=True)
         pb = PrebuildManager(p)
         g = EnsemblGenome("Ustilago_maydis", 33, pb)
         g.download_genome()
@@ -228,9 +228,25 @@ class TestEnsembl:
         assert df.loc["KIS71021"].exons == ((354_742, 354_936), (355_222, 356_690))
         assert df.loc["KIS71021"].exon_stable_ids == ("KIS71021-1", "KIS71021-2")
 
+    def test_df_exons(self, mock_download):
+        p = Path("../prebuild")
+        p.mkdir(exist_ok=True)
+        pb = PrebuildManager(p)
+        g = EnsemblGenome("Ustilago_maydis", 33, pb)
+        g.download_genome()
+        assert isinstance(g.job_transcripts(), ppg.Job)
+        ppg.run_pipegraph()
+        ppg.util.global_pipegraph.test_keep_output = True
+        ppg.util.global_pipegraph.dump_runtimes('logs/runtimes.txt')
+        exon_count = sum([len(x) for x in g.df_transcripts["exons"]])
+        df_exons = g.df_exons
+        assert len(df_exons) > 0
+        assert len(g.df_exons) == exon_count
+        assert hasattr(type(g).df_exons, '__call__')
+
     def test_all_proteins(self, mock_download):
-        p = Path("prebuild")
-        p.mkdir()
+        p = Path("../prebuild")
+        p.mkdir(exist_ok=True)
         pb = PrebuildManager(p)
         g = EnsemblGenome("Ustilago_maydis", 33, pb)
         g.download_genome()
@@ -241,8 +257,8 @@ class TestEnsembl:
         assert df.strand.isin([1, -1]).all()
 
     def test_transcript_ids(self, mock_download):
-        p = Path("prebuild")
-        p.mkdir()
+        p = Path("../prebuild")
+        p.mkdir(exist_ok=True)
         pb = PrebuildManager(p)
         g = EnsemblGenome("Ustilago_maydis", 33, pb)
         g.download_genome()
@@ -253,8 +269,8 @@ class TestEnsembl:
         assert (df.transcript_stable_ids.apply(lambda x: len(x)) > 1).any()
 
     def test_get_additional_gene_gtfs(self):
-        p = Path("prebuild")
-        p.mkdir()
+        p = Path("../prebuild")
+        p.mkdir(exist_ok=True)
         pb = PrebuildManager(p)
         g = EnsemblGenome("Ustilago_maydis", 33, pb)
         assert len(g.get_additional_gene_gtfs()) == 0

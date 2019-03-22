@@ -9,14 +9,6 @@ from .gene import Gene, Transcript
 dp, X = dppd()
 
 
-def normalize_strand(strand):
-    if not isinstance(strand, pd.Series):
-        raise ValueError("normalize_strand expects a pd.series")
-    if not strand.isin(["+", "-", "."]).all():
-        raise ValueError("normalize_strand called on something that was not +-.")
-    return strand.replace({"+": 1, "-": -1, ".": 0})
-
-
 def include_in_downloads(func):
     """A decorator to collect the download funcs"""
     func._include_in_downloads = True
@@ -310,12 +302,11 @@ class GenomeBase(ABC):
         }
         canonical_chromosomes = self.get_chromosome_lengths()
         for (transcript_stable_id, transcript_row) in self.df_transcripts[
-            ["gene_stable_id", "chr", "strand"]
+            ["gene_stable_id", "chr", "strand", 'exons']
         ].iterrows():
             if not transcript_row["chr"] in canonical_chromosomes:
                 continue
-            tr = self.transcript(transcript_stable_id)
-            exons = tr.exons
+            exons = transcript_row['exons']
             for start, stop in exons:
                 res["chr"].append(transcript_row["chr"])
                 res["start"].append(start)

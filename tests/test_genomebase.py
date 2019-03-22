@@ -12,21 +12,6 @@ class TestBase:
     pass
 
 
-def test_normalize_strand_wrong_calls():
-    from mbf_genomes.base import normalize_strand
-
-    with pytest.raises(ValueError):
-        normalize_strand(pd.Series(["+", "-", "?"]))
-    with pytest.raises(ValueError):
-        normalize_strand(pd.Series([0, 1, -1]))
-    with pytest.raises(ValueError):
-        normalize_strand(["+", "-"])
-    with pytest.raises(ValueError):
-        normalize_strand("+")
-    with pytest.raises(ValueError):
-        normalize_strand("-")
-
-
 def test_msgpack_unpacking_class_wrong_property_name():
     from mbf_genomes.base import msgpack_unpacking_class, MsgPackProperty
 
