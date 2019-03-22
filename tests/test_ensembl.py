@@ -240,6 +240,18 @@ class TestEnsembl:
         df = g.df_proteins
         assert df.strand.isin([1, -1]).all()
 
+    def test_transcript_ids(self, mock_download):
+        p = Path("prebuild")
+        p.mkdir()
+        pb = PrebuildManager(p)
+        g = EnsemblGenome("Ustilago_maydis", 33, pb)
+        g.download_genome()
+        g.job_genes()
+        ppg.run_pipegraph()
+
+        df = g.df_genes
+        assert (df.transcript_stable_ids.apply(lambda x: len(x)) > 1).any()
+
     def test_get_additional_gene_gtfs(self):
         p = Path("prebuild")
         p.mkdir()

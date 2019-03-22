@@ -258,6 +258,7 @@ class GenomeBase(ABC):
 
     def get_gtf(self, features=[]):
         import mbf_gtf
+
         if isinstance(features, str):
             features = [features]
 
@@ -336,7 +337,7 @@ class GenomeBase(ABC):
             tes
             biotype
         """
-        gtf = self.get_gtf(["gene", 'transcript'])
+        gtf = self.get_gtf(["gene", "transcript"])
         genes = gtf["gene"]
         transcripts = gtf["transcript"]
         if len(genes) == 0:  # a genome without gene information
@@ -353,10 +354,12 @@ class GenomeBase(ABC):
                     "biotype": [],
                 }
             )
-        elif len(transcripts) == 0: # pragma: no cover
-            raise ValueError("Genome with gene but no transcript information "
-                             "not supported: len(genes) %i, len(transcripts) %i"
-                             % (len(genes), len(transcripts)))
+        elif len(transcripts) == 0:  # pragma: no cover
+            raise ValueError(
+                "Genome with gene but no transcript information "
+                "not supported: len(genes) %i, len(transcripts) %i"
+                % (len(genes), len(transcripts))
+            )
 
         transcripts = transcripts.set_index("gene_id").sort_values(
             ["seqname", "start", "end"]
@@ -365,7 +368,10 @@ class GenomeBase(ABC):
             dp(genes)
             .transassign(
                 gene_stable_id=X.gene_id,
-                name=X.gene_name,
+                name=list(
+                    X.gene_name
+                ),  # this makes sure we have a str(object) column in the dataframe
+                # which triggers msgpack not to mess up our tuple columns.
                 chr=pd.Categorical(X.seqname),
                 start=X.start - 1,
                 stop=X.end,
@@ -508,7 +514,7 @@ class GenomeBase(ABC):
             strand
             cds - [(start, stop)]  # in genomic coordinates
         """
-        gtf = self.get_gtf(['CDS'])
+        gtf = self.get_gtf(["CDS"])
         cds = gtf["CDS"]
         if len(cds) == 0:
             df = pd.DataFrame(
