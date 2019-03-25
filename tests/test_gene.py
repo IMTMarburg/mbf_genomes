@@ -7,9 +7,16 @@ import pandas as pd
 
 data_path = Path(__file__).parent.absolute() / "sample_data"
 
+default_chr_lengths = {
+    "1": 100_000,
+    "2": 200_000,
+    "3": 300_000,
+    "4": 400_000,
+    "5": 500_000,
+}
+
 
 def DummyGenome(df_genes, df_transcripts=None):
-    chr_lengths = {"1": 100_000, "2": 200_000, "3": 300_000, "4": 400_000, "5": 500_000}
 
     df_genes = df_genes.rename(columns={"stable_id": "gene_stable_id"})
     if not "start" in df_genes.columns:
@@ -36,7 +43,7 @@ def DummyGenome(df_genes, df_transcripts=None):
                     exons=[(x[0], x[1]) for x in df_transcripts["exons"]]
                 )
         df_transcripts = df_transcripts.set_index("transcript_stable_id")
-    return HardCodedGenome("dummy", chr_lengths, df_genes, df_transcripts, None)
+    return HardCodedGenome("dummy", default_chr_lengths, df_genes, df_transcripts, None)
 
 
 def test_transcript_get_introns():
@@ -93,6 +100,61 @@ def test_transcript_get_introns():
     assert genome.transcript("trans3").introns == [(5000, 5100), (5200, 5222)]
 
 
+def test_gene_get_introns_merging():
+    genome = DummyGenome(
+        pd.DataFrame(
+            [
+                {
+                    "stable_id": "fake1",
+                    "chr": "1",
+                    "strand": 1,
+                    "tss": 3000,
+                    "tes": 4900,
+                    "description": "bla",
+                },
+                {
+                    "stable_id": "fake2",
+                    "chr": "1",
+                    "strand": -1,
+                    "tss": 5400,
+                    "tes": 4900,
+                    "description": "bla",
+                },
+                {
+                    "stable_id": "fake3",
+                    "chr": "2",
+                    "strand": -1,
+                    "tss": 5400,
+                    "tes": 4900,
+                    "description": "bla",
+                },
+            ]
+        ),
+        # {transcript_stable_id, gene_stable_id, strand, start, end, exons},
+        df_transcripts=pd.DataFrame(
+            {
+                "transcript_stable_id": ["trans1a", "trans1b", "trans2", "trans3"],
+                "gene_stable_id": ["fake1", "fake1", "fake2", "fake3"],
+                "chr": ["1", "1", "1", "2"],
+                "strand": [1, 1, -1, -1],
+                "start": [3100, 3000, 4900, 4900],
+                "stop": [4900, 4000, 5400, 5400],
+                "exons": [
+                    [(3100, 4800)],
+                    [(3000, 3500), (3750, 4000)],
+                    [(4900, 5000), (5100, 5400)],
+                    [(4900, 5000), (5100, 5200), (5222, 5400)],
+                ],
+            }
+        ),
+    )
+    print(genome.gene("fake1").introns)
+    assert genome.gene("fake1").introns == [(4800, 4900)]
+    # assert genome.transcript("trans1b").introns == [(3500, 3750), (4000, 4900)]
+    assert genome.gene("fake2").introns == [(5000, 5100)]
+    assert genome.gene("fake3").introns == [(5000, 5100), (5200, 5222)]
+
+
 def test_intronify_more_complex():
     transcript = {
         "chr": "2R",
@@ -128,6 +190,7 @@ def test_intronify_more_complex():
     }
     genome = DummyGenome(pd.DataFrame([gene]), pd.DataFrame([transcript]))
     g = genome.transcript("FBtr0301547")
+    assert g.gene_id == "FBgn0010575"
     introns = g.introns
     assert (
         np.array(introns)
@@ -145,6 +208,8 @@ def test_intronify_more_complex():
             (14_177_355, 14_243_005),
         ]
     ).all()
+    assert genome.get_chromosome_lengths() == default_chr_lengths
+    assert genome.job_genes() is None
 
 
 def test_intron_intervals_raises_on_inverted():
@@ -241,8 +306,7 @@ def test_get_gene_introns():
     assert len(one) == 0
 
     two = genome.gene("fake2").introns
-    assert (two["start"] == [4900, 5000, 5400]).all()
-    assert (two["stop"] == [4910, 5100, 5500]).all()
+    assert two == [(4900, 4910), (5000, 5100), (5400, 5500)]
 
 
 def test_get_gene_exons():

@@ -38,6 +38,8 @@ def wrappedIterator(width):
 rc_table = str.maketrans("agctAGCT", "tcgaTCGA")
 iupac_forward = "ACGTRYMKSWBDHVN"
 iupac_reverse = "TGCAYRKMSWVHDBN"
+iupac_forward += iupac_forward.lower()
+iupac_reverse += iupac_reverse.lower()
 iupac_rc_table = str.maketrans(
     iupac_forward + iupac_forward.upper(), iupac_reverse + iupac_reverse.upper()
 )

@@ -1,6 +1,11 @@
 import pytest
 from pathlib import Path
-from mbf_genomes.common import reverse_complement, iter_fasta, EukaryoticCode
+from mbf_genomes.common import (
+    reverse_complement,
+    iter_fasta,
+    EukaryoticCode,
+    reverse_complement_iupac,
+)
 
 data_path = Path(__file__).parent.absolute() / "sample_data"
 
@@ -40,3 +45,11 @@ def test_translate_till_stop_non_start_start():
 def test_translate_till_stop_not_three():
     with pytest.raises(ValueError):
         EukaryoticCode.translate_dna_till_stop("TTGTTGTA")
+
+
+def test_reverse_complement_iupac():
+    assert reverse_complement_iupac("AGTC") == "GACT"
+    assert reverse_complement_iupac("agtc") == "gact"
+    assert reverse_complement_iupac("Agtc") == "gacT"
+    assert reverse_complement_iupac("Ngtc") == "gacN"
+    assert reverse_complement_iupac("R") == "Y"

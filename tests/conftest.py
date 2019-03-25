@@ -8,7 +8,10 @@
 import sys
 import pytest
 from pathlib import Path
-from pypipegraph.tests.fixtures import new_pipegraph, pytest_runtest_makereport  # noqa:F401
+from pypipegraph.tests.fixtures import (  # noqa: F401
+    new_pipegraph,  # noqa: F401
+    pytest_runtest_makereport,  # noqa: F401
+)  # noqa: F401
 from mbf_externals.tests.fixtures import local_store, global_store  # noqa:F401
 
 root = Path(__file__).parent.parent
@@ -57,3 +60,22 @@ def mock_download():
     yield
     mbf_genomes.ensembl.get_page = org_get_page
     mbf_genomes.ensembl.download_file_and_gunzip = org_download_file_and_gunzip
+
+
+first_shared_prebuild = True
+
+
+@pytest.fixture()
+def shared_prebuild():
+    global first_shared_prebuild
+    p = Path("../prebuild")
+    if first_shared_prebuild:
+        if p.exists():
+            import shutil
+
+            shutil.rmtree(p)
+        p.mkdir()
+        first_shared_prebuild = False
+    from mbf_externals import PrebuildManager
+
+    return PrebuildManager(p)

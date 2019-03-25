@@ -2,29 +2,12 @@ import numpy as np
 import pandas as pd
 
 
-def get_overlapping_interval_indices(start, stop, start_array, stop_array, handle_overlapping):
-    """Return the indices of all intervals stored in start_array, stop_array that overlap start, stop"""
-    # TODO: replace with better algorithm - e.g. rustbio intervl trees
-    if not handle_overlapping:
-        first_start_smaller = np.searchsorted(start_array, start) - 1
-        first_end_larger = np.searchsorted(stop_array, stop, "right") + 1
-    else:
-        first_start_smaller = 0
-        first_end_larger = len(stop_array)
-    result = []
-    for possible_match in range(
-        max(0, first_start_smaller), min(first_end_larger, len(stop_array))
-    ):
-        s = max(start, start_array[possible_match])
-        e = min(stop, stop_array[possible_match])
-        if s < e:
-            result.append(possible_match)
-    return result
-
-
 def merge_intervals(df):
-    """take a {chr, start, end, *} dataframe and merge overlapping intervals"""
-    if hasattr(df, "to_pandas"):
+    """take a {chr, start, end, *} dataframe and merge overlapping intervals.
+    * is from the last entry.
+
+    """
+    if hasattr(df, "to_pandas"):  # pragma: no cover
         raise ValueError("pydataframe passed")
     df = df.sort_values(["chr", "start"], ascending=[True, True]).reset_index(
         drop=True
@@ -77,7 +60,7 @@ def _merge_choose_rows_to_keep_and_update_positon(df):
     """A helper for the merge_intervals and merge_intervals_with_callback functions that refactors some common code.
     Basically, updates continuous 'runs' of overlapping intervals so that the last one has start = start_of_first, end = end of longest,
     and then returns a boolean array with True if it's the last one"""
-    if hasattr(df, "to_pandas"):
+    if hasattr(df, "to_pandas"):  # pragma: no cover
         raise ValueError("pydataframe passed")
     chrs = np.array(df["chr"])
     starts = np.array(df["start"])
@@ -110,9 +93,10 @@ def _merge_choose_rows_to_keep_and_update_positon(df):
     return keep
 
 
-def merge_identical(sub_df):
-    if (len(sub_df["start"].unique()) != 1) or (len(sub_df["stop"].unique()) != 1):
-        raise ValueError(
-            "Overlapping intervals: %s, merge_identical was set." % (sub_df,)
-        )
-    return sub_df.iloc[0].to_dict()
+# dead code?
+# def merge_identical(sub_df):
+# if (len(sub_df["start"].unique()) != 1) or (len(sub_df["stop"].unique()) != 1):
+# raise ValueError(
+# "Overlapping intervals: %s, merge_identical was set." % (sub_df,)
+# )
+# return sub_df.iloc[0].to_dict()

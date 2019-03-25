@@ -9,14 +9,11 @@ from pypipegraph.util import checksum_file
 
 @pytest.mark.usefixtures("new_pipegraph")
 class TestEnsembl:
-    def test_download(self, new_pipegraph, mock_download):
-        p = Path("../prebuild")
-        p.mkdir(exist_ok=True)
-        pb = PrebuildManager(p)
+    def test_download(self, new_pipegraph, mock_download, shared_prebuild):
         species = (
             "Ashbya_gossypii"
         )  # the smallest eukaryotic species at the time of writing this at 2.8 mb
-        g = EnsemblGenome(species, "41", prebuild_manager=pb)
+        g = EnsemblGenome(species, "41", prebuild_manager=shared_prebuild)
 
         def shorten_genome_fasta(output_path):
             with open(g.find_file("genome.fasta")) as op:
@@ -84,7 +81,7 @@ class TestEnsembl:
         assert g.find_file("cdna.fasta.fai").exists()
 
         new_pipegraph.new_pipegraph()
-        pb = PrebuildManager(p)
+        pb = PrebuildManager(shared_prebuild.prebuilt_path)
         g = EnsemblGenome(species, "41", prebuild_manager=pb)
         g.download_genome()
         test_fasta_job = g.prebuild_manager.prebuild(
@@ -143,46 +140,42 @@ class TestEnsembl:
         with pytest.raises(ValueError):
             g.get_cds_sequence("AAS53315", g.df_proteins.loc["AAS53316"])
 
-    def test_download_jobs_called_by_index(self, new_pipegraph, mock_download):
-        p = Path("../prebuild")
-        p.mkdir(exist_ok=True)
-        pb = PrebuildManager(p)
+    def test_download_jobs_called_by_index(
+        self, new_pipegraph, mock_download, shared_prebuild
+    ):
         species = (
             "Ashbya_gossypii"
         )  # the smallest eukaryotic species at the time of writing this at 2.8 mb
-        g = EnsemblGenome(species, "41", prebuild_manager=pb)
+        g = EnsemblGenome(species, "41", prebuild_manager=shared_prebuild)
         subread = Subread(version="1.6.3")
         with pytest.raises(OSError):
             g.find_prebuild("genome.fasta")
-        g.build_index(subread)
-        g.find_prebuild("genome.fasta")
+        job = g.build_index(subread)
+        g.find_prebuild("genome.fasta")  # this is the actual test.
+        for fn in job.filenames:
+            if Path(fn).exists():
+                Path(fn).unlink()
+        ppg.run_pipegraph()
+        for fn in job.filenames:
+            assert Path(fn).exists()
 
-    def test_species_formating(self,):
-        p = Path("../prebuild")
-        p.mkdir(exist_ok=True)
-        pb = PrebuildManager(p)
+    def test_species_formating(self, shared_prebuild):
         species = (
             "ashbya_gossypii"
         )  # the smallest eukaryotic species at the time of writing this at 2.8 mb
         with pytest.raises(ValueError):
-            EnsemblGenome(species, "41", prebuild_manager=pb)
+            EnsemblGenome(species, "41", prebuild_manager=shared_prebuild)
 
-    def test_unknown_species_raises(self, mock_download):
-        p = Path("../prebuild")
-        p.mkdir(exist_ok=True)
-        pb = PrebuildManager(p)
+    def test_unknown_species_raises(self, mock_download, shared_prebuild):
         species = (
             "Unknown_unknown"
         )  # the smallest eukaryotic species at the time of writing this at 2.8 mb
-        EnsemblGenome(species, "41", prebuild_manager=pb).download_genome()
+        EnsemblGenome(species, "41", prebuild_manager=shared_prebuild).download_genome()
         with pytest.raises(ppg.RuntimeError):
             ppg.run_pipegraph()
 
-    def test_all_genes(self, mock_download):
-        p = Path("../prebuild")
-        p.mkdir(exist_ok=True)
-        pb = PrebuildManager(p)
-        g = EnsemblGenome("Ustilago_maydis", 33, pb)
+    def test_all_genes(self, mock_download, shared_prebuild):
+        g = EnsemblGenome("Ustilago_maydis", 33, shared_prebuild)
         g.download_genome()
         g.job_genes()
         ppg.run_pipegraph()
@@ -205,11 +198,8 @@ class TestEnsembl:
         assert df["chr"].dtype.name == "category"
         assert df["biotype"].dtype.name == "category"
 
-    def test_all_transcripts(self, mock_download):
-        p = Path("../prebuild")
-        p.mkdir(exist_ok=True)
-        pb = PrebuildManager(p)
-        g = EnsemblGenome("Ustilago_maydis", 33, pb)
+    def test_all_transcripts(self, mock_download, shared_prebuild):
+        g = EnsemblGenome("Ustilago_maydis", 33, shared_prebuild)
         g.download_genome()
         assert isinstance(g.job_transcripts(), ppg.Job)
         ppg.run_pipegraph()
@@ -228,27 +218,21 @@ class TestEnsembl:
         assert df.loc["KIS71021"].exons == ((354_742, 354_936), (355_222, 356_690))
         assert df.loc["KIS71021"].exon_stable_ids == ("KIS71021-1", "KIS71021-2")
 
-    def test_df_exons(self, mock_download):
-        p = Path("../prebuild")
-        p.mkdir(exist_ok=True)
-        pb = PrebuildManager(p)
-        g = EnsemblGenome("Ustilago_maydis", 33, pb)
+    def test_df_exons(self, mock_download, shared_prebuild):
+        g = EnsemblGenome("Ustilago_maydis", 33, shared_prebuild)
         g.download_genome()
         assert isinstance(g.job_transcripts(), ppg.Job)
         ppg.run_pipegraph()
         ppg.util.global_pipegraph.test_keep_output = True
-        ppg.util.global_pipegraph.dump_runtimes('logs/runtimes.txt')
+        ppg.util.global_pipegraph.dump_runtimes("logs/runtimes.txt")
         exon_count = sum([len(x) for x in g.df_transcripts["exons"]])
         df_exons = g.df_exons
         assert len(df_exons) > 0
         assert len(g.df_exons) == exon_count
-        assert hasattr(type(g).df_exons, '__call__')
+        assert hasattr(type(g).df_exons, "__call__")
 
-    def test_all_proteins(self, mock_download):
-        p = Path("../prebuild")
-        p.mkdir(exist_ok=True)
-        pb = PrebuildManager(p)
-        g = EnsemblGenome("Ustilago_maydis", 33, pb)
+    def test_all_proteins(self, mock_download, shared_prebuild):
+        g = EnsemblGenome("Ustilago_maydis", 33, shared_prebuild)
         g.download_genome()
         g.job_proteins()
         ppg.run_pipegraph()
@@ -256,11 +240,9 @@ class TestEnsembl:
         df = g.df_proteins
         assert df.strand.isin([1, -1]).all()
 
-    def test_transcript_ids(self, mock_download):
-        p = Path("../prebuild")
-        p.mkdir(exist_ok=True)
-        pb = PrebuildManager(p)
-        g = EnsemblGenome("Ustilago_maydis", 33, pb)
+    def test_transcript_ids(self, mock_download, shared_prebuild):
+        # test that ustilago has at least one gene with multilpe transcripts
+        g = EnsemblGenome("Ustilago_maydis", 33, shared_prebuild)
         g.download_genome()
         g.job_genes()
         ppg.run_pipegraph()
@@ -268,20 +250,46 @@ class TestEnsembl:
         df = g.df_genes
         assert (df.transcript_stable_ids.apply(lambda x: len(x)) > 1).any()
 
-    def test_get_additional_gene_gtfs(self):
-        p = Path("../prebuild")
-        p.mkdir(exist_ok=True)
-        pb = PrebuildManager(p)
-        g = EnsemblGenome("Ustilago_maydis", 33, pb)
+    def test_multiple_exon_transcripts(self, mock_download, shared_prebuild):
+        # test that ustilago has at least one transcript with multiple exons
+        g = EnsemblGenome("Ustilago_maydis", 33, shared_prebuild)
+        g.download_genome()
+        g.job_transcripts()
+        ppg.run_pipegraph()
+
+        df = g.df_transcripts
+        print(df.exons)
+        assert (df.exons.apply(lambda x: len(x)) > 1).any()
+
+    def test_get_additional_gene_gtfs(self, mock_download, shared_prebuild):
+        g = EnsemblGenome("Ustilago_maydis", 33, shared_prebuild)
         assert len(g.get_additional_gene_gtfs()) == 0
-        g = EnsemblGenome("Homo_sapiens", 74, pb)
+        g = EnsemblGenome("Homo_sapiens", 74, shared_prebuild)
         assert "ribosomal_genes_grch37" in g.get_additional_gene_gtfs()[0].name
         assert g.get_additional_gene_gtfs()[0].exists()
-        g = EnsemblGenome("Homo_sapiens", 75, pb)
+        g = EnsemblGenome("Homo_sapiens", 75, shared_prebuild)
         assert "ribosomal_genes_grch38" in g.get_additional_gene_gtfs()[0].name
         assert g.get_additional_gene_gtfs()[0].exists()
-        g = EnsemblGenome("Mus_musculus", 68, pb)
+        g = EnsemblGenome("Mus_musculus", 68, shared_prebuild)
         assert "ribosomal_genes_mm10" in g.get_additional_gene_gtfs()[0].name
         assert g.get_additional_gene_gtfs()[0].exists()
-        g = EnsemblGenome("Mus_musculus", 67, pb)
+        g = EnsemblGenome("Mus_musculus", 67, shared_prebuild)
         assert len(g.get_additional_gene_gtfs()) == 0
+
+    def test_genes_iterator(self, mock_download, shared_prebuild):
+        g = EnsemblGenome("Ashbya_gossypii", 41, shared_prebuild)
+        g.job_genes()
+        ppg.run_pipegraph()
+        genes = list(g.genes)
+        assert len(genes) == len(g.df_genes)
+        assert set([x.gene_stable_id for x in genes]) == set(g.df_genes.index)
+
+    def test_transcript_iterator(self, mock_download, shared_prebuild):
+        g = EnsemblGenome("Ashbya_gossypii", 41, shared_prebuild)
+        g.job_transcripts()
+        ppg.run_pipegraph()
+        transcripts = list(g.transcripts)
+        assert len(transcripts) == len(g.df_transcripts)
+        assert set([x.transcript_stable_id for x in transcripts]) == set(
+            g.df_transcripts.index
+        )

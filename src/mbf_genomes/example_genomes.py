@@ -1,11 +1,14 @@
 from pathlib import Path
 from . import FileBasedGenome
 
-data_path = Path(__file__).parent.parent.parent.absolute() / "tests" / "sample_data"
+data_path = (
+    Path(__file__).parent.parent.parent.absolute() / "tests" / "sample_data"
+).absolute()
 
 
 def get_Candidatus_carsonella_ruddii_pv(name=None, **kwargs):
-    if name is None:
+    """A FilebasedGenome used by other libraries for their tests"""
+    if name is None:  # pragma: no cover
         name = "Candidatus_carsonella"
     return FileBasedGenome(
         name,

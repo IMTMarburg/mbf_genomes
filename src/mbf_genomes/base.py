@@ -119,7 +119,7 @@ class GenomeBase(ABC):
 
     @abstractmethod
     def _msg_pack_job(self, property_name, filename, callback_function):
-        raise NotImplementedError()
+        raise NotImplementedError  # pragma: no cover
 
     def download_genome(self):
         """All the jobs needed to download the genome and prepare it for usage"""
@@ -251,9 +251,6 @@ class GenomeBase(ABC):
     def get_gtf(self, features=[]):
         import mbf_gtf
 
-        if isinstance(features, str):
-            features = [features]
-
         filenames = [self.find_file("genes.gtf")]
         if hasattr(self, "get_additional_gene_gtfs"):
             filenames.extend(self.get_additional_gene_gtfs())
@@ -291,7 +288,7 @@ class GenomeBase(ABC):
 
     @ReadOnlyPropertyWithFunctionAccess
     def df_exons(self):
-        """a dataframe of all exons"""
+        """a dataframe of all exons (on canonical chromosomes - ie those in get_chromosome_lengths())"""
         res = {
             "chr": [],
             "start": [],
@@ -302,11 +299,11 @@ class GenomeBase(ABC):
         }
         canonical_chromosomes = self.get_chromosome_lengths()
         for (transcript_stable_id, transcript_row) in self.df_transcripts[
-            ["gene_stable_id", "chr", "strand", 'exons']
+            ["gene_stable_id", "chr", "strand", "exons"]
         ].iterrows():
-            if not transcript_row["chr"] in canonical_chromosomes:
+            if not transcript_row["chr"] in canonical_chromosomes:  # pragma: no cover
                 continue
-            exons = transcript_row['exons']
+            exons = transcript_row["exons"]
             for start, stop in exons:
                 res["chr"].append(transcript_row["chr"])
                 res["start"].append(start)
@@ -360,7 +357,7 @@ class GenomeBase(ABC):
             .transassign(
                 gene_stable_id=X.gene_id,
                 name=list(
-                    X.gene_name
+                    X.gene_name if hasattr(X, "gene_name") else X.gene_id
                 ),  # this makes sure we have a str(object) column in the dataframe
                 # which triggers msgpack not to mess up our tuple columns.
                 chr=pd.Categorical(X.seqname),
@@ -392,7 +389,8 @@ class GenomeBase(ABC):
 
     def sanity_check_genes(self, df_genes):
         strand_values = set(df_genes.strand.unique())
-        if strand_values.difference([1, -1]):
+        if strand_values.difference([1, -1]):  # pragma: no cover
+            # this is currently already being handled by the gtf parser - defensive
             raise ValueError(f"Gene strand was outside of 1, -1: {strand_values}")
         wrong_order = df_genes["start"] > df_genes["stop"]
         if wrong_order.any():
@@ -442,7 +440,9 @@ class GenomeBase(ABC):
             .transassign(
                 transcript_stable_id=X.transcript_id,
                 gene_stable_id=X.gene_id,
-                name=X.transcript_name,
+                name=X.transcript_name
+                if hasattr(X, "transcript_name")
+                else X.transcript_id,
                 chr=pd.Categorical(X.seqname),
                 start=X.start - 1,
                 stop=X.end,
@@ -477,7 +477,9 @@ class GenomeBase(ABC):
 
     def sanity_check_transcripts(self, df_transcripts):
         strand_values = set(df_transcripts.strand.unique())
-        if strand_values.difference([1, -1]):
+        if strand_values.difference(
+            [1, -1]
+        ):  # pragma: no cover - defensive, currently handled in gtf parser
             raise ValueError(f"Transcript strand was outside of 1, -1: {strand_values}")
 
         for transcript_stable_id, row in df_transcripts.iterrows():

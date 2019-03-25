@@ -22,10 +22,17 @@ def _intron_intervals_from_exons(exons, gene_start, gene_stop, merge=False):
         if exon_stop < exon_start:
             raise ValueError("inverted exon")
         if intron_start != exon_start:
-            if intron_start > exon_start:
-                return _intron_intervals_from_exons(
-                    exons, gene_start, gene_stop, True
-                )  # redo it with merging
+            if intron_start > exon_start:  # the overlapping exons case.
+                raise ValueError(
+                    "_intron_intervals_from_exons saw exons "
+                    "that need merging by setting merge=True,"
+                    " but merge was False - should not happen?"
+                )  # pragma: no cover
+                # arguably we could just recall with merge = True
+                # but it's an upstream caller bug, it should know
+                # whether to expect overlapping exons (=genes)
+                # or not (transcripts) and this is defensive.
+
             res.append((intron_start, exon_start))
         exon_no += 1
         intron_start = exon_stop
@@ -52,7 +59,7 @@ class Gene:
     @property
     def introns(self):
         """Get truly intronic regions - ie. not covered by any exon for this gene
-        result is a DataFrame{chr, start, stop}
+        result is  [(start, stop),...]
 
         """
         gene = self.data
@@ -73,7 +80,8 @@ class Gene:
             introns["stop"].append(stop)
         introns["chr"] = tr.data["chr"]
         introns = pd.DataFrame(introns)
-        return merge_intervals(introns)
+        introns = merge_intervals(introns)
+        return list(zip(introns["start"], introns["stop"]))
 
     @property
     def exons_merged(self):
@@ -89,8 +97,7 @@ class Gene:
                 exons["stop"].append(exon_stop)
         exons["chr"] = tr.data["chr"]
         exons = pd.DataFrame(exons)
-        if len(exons) > 1:
-            exons = merge_intervals(exons)
+        exons = merge_intervals(exons)
         return exons
 
     @property

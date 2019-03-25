@@ -1,9 +1,10 @@
 import pytest
 from pathlib import Path
 import pypipegraph as ppg
-from mbf_genomes import FileBasedGenome
+from mbf_genomes import FileBasedGenome, InteractiveFileBasedGenome
 from mbf_genomes.common import iter_fasta, ProkaryoticCode
 from mbf_externals.util import UpstreamChangedError
+from pandas.testing import assert_frame_equal
 
 
 data_path = Path(__file__).parent.absolute() / "sample_data"
@@ -241,3 +242,147 @@ class TestFilebased:
         g.download_genome()
         with pytest.raises(UpstreamChangedError):
             ppg.run_pipegraph()
+
+    def test_get_gtf_using_additional_gtf(self):
+        g = FileBasedGenome(
+            "Candidatus_carsonella",
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz",
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz",
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz",
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz",
+        )
+        g.get_additional_gene_gtfs = lambda: [
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.42.additional.gtf.gz"
+        ]
+        g.download_genome()
+        g.job_genes()
+        ppg.run_pipegraph()
+        assert "TEST1_001" in g.df_genes.index
+
+    def test_genes_unique_check(self):
+        g = FileBasedGenome(
+            "Candidatus_carsonella",
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz",
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz",
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz",
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz",
+        )
+        g.get_additional_gene_gtfs = lambda: [
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"
+        ]
+        g.download_genome()
+        job = g.job_genes()
+        with pytest.raises(ppg.RuntimeError):
+            ppg.run_pipegraph()
+        assert "gene_stable_ids were not unique" in str(job.exception)
+
+    def test_transcripts_unique_check(self):
+        g = FileBasedGenome(
+            "Candidatus_carsonella",
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz",
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz",
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz",
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz",
+        )
+        g.get_additional_gene_gtfs = lambda: [
+            data_path
+            / "Candidatus_carsonella_ruddii_pv.ASM1036v1.42.more_transcripts.gtf.gz"
+        ]
+        g.download_genome()
+        job = g.job_transcripts()
+        with pytest.raises(ppg.RuntimeError):
+            ppg.run_pipegraph()
+        assert "transcript_stable_ids were not unique" in str(job.exception)
+
+    def test_genes_wrong_start_stop_order(self):
+        g = FileBasedGenome(
+            "Candidatus_carsonella",
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz",
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.42.broken.gtf.gz",
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz",
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz",
+        )
+        job = g.job_genes()
+        with pytest.raises(ppg.RuntimeError):
+            ppg.run_pipegraph()
+        assert "start > stop" in str(job.exception)
+
+    def test_transcript_wrong_order(self):
+        g = FileBasedGenome(
+            "Candidatus_carsonella",
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz",
+            data_path
+            / "Candidatus_carsonella_ruddii_pv.ASM1036v1.transcript_wrong_order.gtf.gz",
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz",
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz",
+        )
+        job = g.job_transcripts()
+        with pytest.raises(ppg.RuntimeError):
+            ppg.run_pipegraph()
+        assert "start > stop" in str(job.exception)
+
+    def test_transcript_exon_outside_transcript(self):
+        g = FileBasedGenome(
+            "Candidatus_carsonella",
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz",
+            data_path
+            / "Candidatus_carsonella_ruddii_pv.ASM1036v1.transcript_exon_outside.gtf.gz",
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz",
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz",
+        )
+        job = g.job_transcripts()
+        with pytest.raises(ppg.RuntimeError):
+            ppg.run_pipegraph()
+        assert "Exon outside of transcript" in str(job.exception)
+        assert isinstance(job.exception, ValueError)
+
+    def test_transcript_transcript_outside_gene(self):
+        g = FileBasedGenome(
+            "Candidatus_carsonella",
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz",
+            data_path
+            / "Candidatus_carsonella_ruddii_pv.ASM1036v1.transcript_outside_gene.gtf.gz",
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz",
+            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz",
+        )
+        job = g.job_transcripts()
+        with pytest.raises(ppg.RuntimeError):
+            ppg.run_pipegraph()
+        assert "Transcript outside of gene" in str(job.exception)
+        assert isinstance(job.exception, ValueError)
+
+    def test_example_genome_and_interactive(self, new_pipegraph):
+        from mbf_genomes import example_genomes
+
+        g = example_genomes.get_Candidatus_carsonella_ruddii_pv()
+        g.download_genome()
+        g.job_genes()
+        ppg.run_pipegraph()
+        assert g.get_chromosome_lengths()
+        new_pipegraph.new_pipegraph()
+        Path(g.cache_dir, "lookup", "df_genes.msgpack").unlink()  # so we rerun this
+        ia = InteractiveFileBasedGenome(
+            "shu",
+            g.find_file("genome.fasta"),
+            g.find_file("cdna.fasta"),
+            g.find_file("pep.fasta"),
+            g.find_file("genes.gtf"),
+            g.cache_dir,
+        )
+        assert ia.get_chromosome_lengths() == g.get_chromosome_lengths()
+        ia.job_genes()
+        ppg.run_pipegraph()
+        assert_frame_equal(ia.df_genes, g.df_genes)
+        ppg.util.global_pipegraph = None
+        Path(g.cache_dir, "lookup", "df_genes.msgpack").unlink()  # so we rerun this
+        ia2 = InteractiveFileBasedGenome(
+            "shu",
+            g.find_file("genome.fasta"),
+            g.find_file("cdna.fasta"),
+            g.find_file("pep.fasta"),
+            g.find_file("genes.gtf"),
+            g.cache_dir,
+        )
+        ia.job_genes()
+        assert ia2.get_chromosome_lengths() == g.get_chromosome_lengths()
+        assert_frame_equal(ia2.df_genes, g.df_genes)

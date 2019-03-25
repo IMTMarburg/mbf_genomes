@@ -93,9 +93,11 @@ class EnsemblGenome(GenomeBase):
 
     @property
     def gtf_dependencies(self):
-        return self._pb_download_gtf() + [
+        res = self._pb_download_gtf() + [
             ppg.FileInvariant(p) for p in self.get_additional_gene_gtfs()
         ]
+        self.download_genome()
+        return res
 
     @include_in_downloads
     def _pb_download_genome_fasta(self):
@@ -161,7 +163,7 @@ class EnsemblGenome(GenomeBase):
             [output_filename],
             do_download,
         )
-        job.depends_on(self.server_job)
+        job.depends_on(self._pb_find_server())
         return job
 
     @lazy_property

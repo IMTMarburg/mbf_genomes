@@ -16,7 +16,6 @@ class FileBasedGenome(GenomeBase):
         protein_fasta_file=None,
         genetic_code=EukaryoticCode,
         cache_dir=None,
-        ignore_code_changes=False,
     ):
         """
         Parameters
@@ -33,7 +32,6 @@ class FileBasedGenome(GenomeBase):
         super().__init__()
         self.name = name
         ppg.assert_uniqueness_of_object(self)
-        self.ignore_code_changes = ignore_code_changes
         self.genetic_code = genetic_code
         if cache_dir is None:
             self.cache_dir = (
@@ -41,7 +39,7 @@ class FileBasedGenome(GenomeBase):
                 / "FileBasedGenome"
                 / self.name
             )
-        else:
+        else:  # pragma: no cover
             self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -114,8 +112,6 @@ class FileBasedGenome(GenomeBase):
 
         Path(output_filename).parent.mkdir(exist_ok=True)
         job = ppg.FileGeneratingJob(output_filename, prep)
-        if self.ignore_code_changes:
-            job.ignore_code_changes()
         job.depends_on(deps)
         self._download_jobs.append(job)
         return job
@@ -142,8 +138,6 @@ class FileBasedGenome(GenomeBase):
         job = ppg.FileGeneratingJob(self.cdna_fasta_filename, create).depends_on(
             self.job_transcripts(), self.genome_fasta_dependencies
         )
-        if self.ignore_code_changes:
-            job.ignore_code_changes()
         self._download_jobs.append(job)
         return job
 
@@ -164,8 +158,6 @@ class FileBasedGenome(GenomeBase):
         job = ppg.FileGeneratingJob(self.protein_fasta_filename, create).depends_on(
             self.job_proteins(), self.genome_fasta_dependencies
         )
-        if self.ignore_code_changes:
-            job.ignore_code_changes()
         self._download_jobs.append(job)
         return job
 
@@ -184,8 +176,6 @@ class FileBasedGenome(GenomeBase):
         j = ppg.FileGeneratingJob(out_dir / filename, dump).depends_on(
             ppg.FunctionInvariant(out_dir / filename / property_name, callback_function)
         )
-        if self.ignore_code_changes:
-            j.ignore_code_changes()
         self._prebuilds.append(j)
         return j
 
@@ -219,10 +209,11 @@ class InteractiveFileBasedGenome(GenomeBase):
             "cdna.fasta": self.cdna_fasta_filename,
             "protein.fasta": self.protein_fasta_filename,
             "genes.gtf": self.gtf_filename,
-            'df_genes.msgpack': self.cache_dir / 'lookup' / 'df_genes.msgpack',
-            'df_transcripts.msgpack': self.cache_dir / 'lookup' / 'df_transcripts.msgpack',
+            "df_genes.msgpack": self.cache_dir / "lookup" / "df_genes.msgpack",
+            "df_transcripts.msgpack": self.cache_dir
+            / "lookup"
+            / "df_transcripts.msgpack",
         }
-        self.ignore_code_changes = False
 
         if ppg.util.inside_ppg():
             self.gtf_dependencies = ppg.FileInvariant(self.gtf_filename)
@@ -230,13 +221,14 @@ class InteractiveFileBasedGenome(GenomeBase):
             self.gtf_dependencies = []
 
     def _msg_pack_job(self, property_name, filename, callback_function):
+        out_dir = self.cache_dir / "lookup"
+        out_dir.mkdir(exist_ok=True)
+
         if not ppg.util.inside_ppg():
-            if not Path(filename).exists():
-                df = callback_function()
-                df.to_msgpack(filename)
+            if not Path(filename).exists():  # pragma: no branch
+                df = callback_function(self)
+                df.to_msgpack(out_dir / filename)
         else:
-            out_dir = self.cache_dir / "lookup"
-            out_dir.mkdir(exist_ok=True)
 
             def dump(output_filename):
                 df = callback_function(self)
@@ -247,8 +239,6 @@ class InteractiveFileBasedGenome(GenomeBase):
                     out_dir / filename / property_name, callback_function
                 )
             )
-            if self.ignore_code_changes:
-                j.ignore_code_changes()
             self._prebuilds.append(j)
             return j
 
