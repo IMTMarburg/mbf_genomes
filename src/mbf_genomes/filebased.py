@@ -48,9 +48,9 @@ class FileBasedGenome(GenomeBase):
             genome_fasta_file, self.genome_fasta_filename
         )
 
-        self.gtf_filename, self.gtf_dependencies = ppg.util.job_or_filename(
+        self.gtf_filename, self.gene_gtf_dependencies = ppg.util.job_or_filename(
             gtf_file,
-            lambda x: PrebuildFileInvariantsExploding(self.name + "_gtf_file", [x]),
+            lambda x: [PrebuildFileInvariantsExploding(self.name + "_gtf_file", [x])],
         )
 
         self.cdna_fasta_filename = self.cache_dir / "cdna" / "cdna.fasta"
@@ -216,9 +216,9 @@ class InteractiveFileBasedGenome(GenomeBase):
         }
 
         if ppg.util.inside_ppg():
-            self.gtf_dependencies = ppg.FileInvariant(self.gtf_filename)
+            self.gene_gtf_dependencies = ppg.FileInvariant(self.gtf_filename)
         else:
-            self.gtf_dependencies = []
+            self.gene_gtf_dependencies = []
 
     def _msg_pack_job(self, property_name, filename, callback_function):
         out_dir = self.cache_dir / "lookup"

@@ -264,6 +264,7 @@ class TestEnsembl:
     def test_get_additional_gene_gtfs(self, mock_download, shared_prebuild):
         g = EnsemblGenome("Ustilago_maydis", 33, shared_prebuild)
         assert len(g.get_additional_gene_gtfs()) == 0
+
         g = EnsemblGenome("Homo_sapiens", 74, shared_prebuild)
         assert "ribosomal_genes_grch37" in g.get_additional_gene_gtfs()[0].name
         assert g.get_additional_gene_gtfs()[0].exists()

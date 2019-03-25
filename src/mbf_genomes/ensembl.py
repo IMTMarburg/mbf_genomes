@@ -92,12 +92,9 @@ class EnsemblGenome(GenomeBase):
         return []
 
     @property
-    def gtf_dependencies(self):
-        res = self._pb_download_gtf() + [
-            ppg.FileInvariant(p) for p in self.get_additional_gene_gtfs()
-        ]
-        self.download_genome()
-        return res
+    def gene_gtf_dependencies(self):
+        self.download_genome()  # so it's registered
+        return [self._pb_download_gtf()]
 
     @include_in_downloads
     def _pb_download_genome_fasta(self):

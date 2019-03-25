@@ -60,7 +60,6 @@ class TestIntervals:
 
         def cb(sub_df):
             res = sub_df.iloc[0]
-            res["key"] = "".join(sub_df["key"])
             return res
 
         with pytest.raises(ValueError):

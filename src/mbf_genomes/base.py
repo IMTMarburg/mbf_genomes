@@ -5,6 +5,7 @@ from dppd import dppd
 import pysam
 from .common import reverse_complement
 from .gene import Gene, Transcript
+from mbf_externals.prebuild import PrebuildFileInvariantsExploding
 
 dp, X = dppd()
 
@@ -151,9 +152,10 @@ class GenomeBase(ABC):
                 except KeyError:
                     pass
             else:
-                for f in job.filenames:
-                    if Path(f).name == name:
-                        return Path(f)
+                for j in job:
+                    for f in j.filenames:
+                        if Path(f).name == name:
+                            return Path(f)
         # now search for undeclared, but created files
         # mostly for aligners, where we only track the sentinels, not the index
         # files
@@ -175,9 +177,10 @@ class GenomeBase(ABC):
                 except KeyError:
                     pass
             else:
-                for f in job.filenames:
-                    if Path(f).name == name:
-                        return job
+                for j in job:
+                    for f in j.filenames:
+                        if Path(f).name == name:
+                            return job
         raise OSError(f"File not found: {name}")
 
     def build_index(self, aligner, fasta_to_use=None, gtf_to_use=None):
@@ -248,12 +251,14 @@ class GenomeBase(ABC):
         with pysam.FastaFile(str(self.find_file("pep.fasta"))) as f:
             return f.fetch(protein_id)
 
+    def get_additional_gene_gtf_filenames(self):
+        return []
+
     def get_gtf(self, features=[]):
         import mbf_gtf
 
         filenames = [self.find_file("genes.gtf")]
-        if hasattr(self, "get_additional_gene_gtfs"):
-            filenames.extend(self.get_additional_gene_gtfs())
+        filenames.extend(self.get_additional_gene_gtf_filenames())
         dfs = {}
         for gtf_filename in filenames:
             if gtf_filename is None:
@@ -550,6 +555,18 @@ class GenomeBase(ABC):
         lambda self: [self.gtf_dependencies, self.job_genes()]
     )
     df_proteins = MsgPackProperty(lambda self: self.gtf_dependencies)
+
+    @property
+    def gtf_dependencies(self):
+        res = self.gene_gtf_dependencies
+        additional = self.get_additional_gene_gtf_filenames()
+        if additional:
+            res.append(
+                PrebuildFileInvariantsExploding(
+                    self.name + "_additional_gtfs", additional
+                )
+            )
+        return res
 
 
 @class_with_downloads

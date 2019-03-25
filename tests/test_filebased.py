@@ -251,11 +251,21 @@ class TestFilebased:
             data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz",
             data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz",
         )
-        g.get_additional_gene_gtfs = lambda: [
+        g.get_additional_gene_gtf_filenames = lambda: [
             data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.42.additional.gtf.gz"
         ]
         g.download_genome()
-        g.job_genes()
+        j = g.job_genes()
+        for x in j.prerequisites:
+            if hasattr(x, "filenames"):
+                print(x, x.filenames)
+                if (
+                    data_path
+                    / "Candidatus_carsonella_ruddii_pv.ASM1036v1.42.additional.gtf.gz"
+                ) in x.filenames:
+                    break
+        else:
+            assert False  # wrong preqs
         ppg.run_pipegraph()
         assert "TEST1_001" in g.df_genes.index
 
@@ -267,7 +277,7 @@ class TestFilebased:
             data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz",
             data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz",
         )
-        g.get_additional_gene_gtfs = lambda: [
+        g.get_additional_gene_gtf_filenames = lambda: [
             data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"
         ]
         g.download_genome()
@@ -284,7 +294,7 @@ class TestFilebased:
             data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz",
             data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz",
         )
-        g.get_additional_gene_gtfs = lambda: [
+        g.get_additional_gene_gtf_filenames = lambda: [
             data_path
             / "Candidatus_carsonella_ruddii_pv.ASM1036v1.42.more_transcripts.gtf.gz"
         ]
