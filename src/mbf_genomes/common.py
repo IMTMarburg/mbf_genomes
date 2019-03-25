@@ -179,3 +179,24 @@ class ProkaryoticCode(GeneticCode):
     genetic_code = universal_genenetic_code
     # for e coli, from wikipedia) - 83% AUG (3542/4284), 14% (612) GUG, 3% (103) UUG[7] and one or two others (e.g., an AUU and possibly a CUG
     start_codons = ["ATG", "GTG", "TTG", " ATT", "CTG"]
+
+
+def df_to_rows(df, columns_to_choose=None):
+    """Turn a DataFrame into a Dictionary
+    index -> {columnA: X, columnB: Y}
+    You can then use that much faster than 
+    accessing df.loc[] repeatedly 
+    right now (2019-03-25) for whatever reason
+    """
+    if columns_to_choose is None:
+        pass
+    else:
+        df = df[columns_to_choose]
+    if df.index.duplicated().any():
+        raise ValueError("df_to_rows needs a unique index")
+    result = {}
+    for idx, row in df.iterrows():
+        result[idx ] = row
+    return result
+
+

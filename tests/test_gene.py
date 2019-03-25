@@ -340,6 +340,15 @@ def test_get_gene_exons():
                     "description": "bla",
                     "name": "bla3",
                 },
+                {
+                    "stable_id": "fake4",
+                    "chr": "2",
+                    "strand": -1,
+                    "tss": 6400,
+                    "tes": 5900,
+                    "description": "bla",
+                    "name": "bla3",
+                },
             ]
         ),
         # {transcript_stable_id, gene_stable_id, strand, start, end, exons},
@@ -364,6 +373,10 @@ def test_get_gene_exons():
     two = g.exons_merged
     assert (two["start"] == [4910, 5100]).all()
     assert (two["stop"] == [5000, 5400]).all()
+    assert "chr" in two.columns
+    assert "strand" in two.columns
+    four = genome.gene("fake4").exons_merged
+    assert len(four) == 0
 
 
 def test_get_gene_exons_protein_coding():
@@ -469,6 +482,15 @@ def test_gene_exons_overlapping():
                     "description": "bla",
                     "name": "bla3",
                 },
+                {
+                    "stable_id": "fake4",
+                    "chr": "2",
+                    "strand": -1,
+                    "tss": 6400,
+                    "tes": 5900,
+                    "description": "bla",
+                    "name": "bla3",
+                },
             ]
         ),
         # {transcript_stable_id, gene_stable_id, strand, start, end, exons},
@@ -492,3 +514,6 @@ def test_gene_exons_overlapping():
     one = genome.gene("fake1").exons_overlapping
     assert (one["start"] == [3000, 3100, 3300, 3750]).all()
     assert (one["stop"] == [3500, 4900, 3330, 4000]).all()
+    assert "chr" in one.columns
+    assert "strand" in one.columns
+    assert len(genome.gene("fake4").exons_overlapping) == 0

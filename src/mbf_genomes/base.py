@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 import pandas as pd
 from dppd import dppd
 import pysam
-from .common import reverse_complement
+from .common import reverse_complement, df_to_rows
 from .gene import Gene, Transcript
 from mbf_externals.prebuild import PrebuildFileInvariantsExploding
 
@@ -366,11 +366,11 @@ class GenomeBase(ABC):
                 ),  # this makes sure we have a str(object) column in the dataframe
                 # which triggers msgpack not to mess up our tuple columns.
                 chr=pd.Categorical(X.seqname),
-                start=X.start - 1,
+                start=X.start,
                 stop=X.end,
                 strand=X.strand,
-                tss=(genes.start - 1).where(genes.strand == 1, genes.end),
-                tes=(genes.end).where(genes.strand == 1, genes.start - 1),
+                tss=(genes.start).where(genes.strand == 1, genes.end),
+                tes=(genes.end).where(genes.strand == 1, genes.start),
                 biotype=pd.Categorical(X.gene_biotype),
             )
             .sort_values(["chr", "start"])
@@ -410,6 +410,8 @@ class GenomeBase(ABC):
             biotype,
             exons  - list (start, stop)
         """
+        import time
+
         gtf = self.get_gtf(["transcript", "exon"])
         transcripts = gtf["transcript"]
         exons = gtf["exon"]
@@ -449,7 +451,7 @@ class GenomeBase(ABC):
                 if hasattr(X, "transcript_name")
                 else X.transcript_id,
                 chr=pd.Categorical(X.seqname),
-                start=X.start - 1,
+                start=X.start,
                 stop=X.end,
                 strand=X.strand,
                 biotype=pd.Categorical(X.transcript_biotype),
@@ -462,14 +464,15 @@ class GenomeBase(ABC):
             raise ValueError("transcript_stable_ids were not unique")
         result_exons = {}
         result_exon_ids = {}
-        for transcript_stable_id, exon in all_exons.iterrows():
-            estart = exon["start"] - 1
-            estop = exon["end"]
+        for (transcript_stable_id, estart, estop, eid) in zip(
+            all_exons.index, all_exons["start"], all_exons["end"], all_exons["exon_id"]
+        ):
             if not transcript_stable_id in result_exons:
                 result_exons[transcript_stable_id] = []
                 result_exon_ids[transcript_stable_id] = []
             result_exons[transcript_stable_id].append((estart, estop))
-            result_exon_ids[transcript_stable_id].append(exon["exon_id"])
+            result_exon_ids[transcript_stable_id].append(eid)
+
         result_exons = pd.Series(
             list(result_exons.values()), index=list(result_exons.keys())
         )
@@ -478,6 +481,7 @@ class GenomeBase(ABC):
         )
         result = result.assign(exons=result_exons, exon_stable_ids=result_exon_ids)
         self.sanity_check_transcripts(result)
+
         return result
 
     def sanity_check_transcripts(self, df_transcripts):
@@ -487,17 +491,24 @@ class GenomeBase(ABC):
         ):  # pragma: no cover - defensive, currently handled in gtf parser
             raise ValueError(f"Transcript strand was outside of 1, -1: {strand_values}")
 
-        for transcript_stable_id, row in df_transcripts.iterrows():
-            start = row["start"]
-            stop = row["stop"]
+        genes = df_to_rows(self.df_genes, ["start", "stop"])
+        for transcript_stable_id, start, stop, exons, gene_stable_id in zip(
+            df_transcripts.index,
+            df_transcripts["start"],
+            df_transcripts["stop"],
+            df_transcripts["exons"],
+            df_transcripts["gene_stable_id"],
+        ):
+
             if start > stop:
                 raise ValueError("start > stop {row}")
-            for estart, estop in row["exons"]:
+            for estart, estop in exons:
                 if estart < start or estop > stop:
                     raise ValueError(
                         f"Exon outside of transcript: {transcript_stable_id}"
                     )
-            gene_info = self.df_genes.loc[row["gene_stable_id"]]
+            continue
+            gene_info = genes[gene_stable_id]
             if start < gene_info["start"] or stop > gene_info["stop"]:
                 raise ValueError(
                     f"Transcript outside of gene: {transcript_stable_id} {start} {stop} {gene_info['start']} {gene_info['stop']}"
@@ -540,7 +551,7 @@ class GenomeBase(ABC):
             gene_stable_id = sub_df.gene_id.iloc[0]
             chr = sub_df.seqname.iloc[0]
             strand = sub_df.strand.iloc[0]
-            cds = list(zip(sub_df.start - 1, sub_df.end))
+            cds = list(zip(sub_df.start, sub_df.end))
             result["protein_stable_id"].append(protein_stable_id)
             result["gene_stable_id"].append(gene_stable_id)
             result["transcript_stable_id"].append(transcript_stable_id)

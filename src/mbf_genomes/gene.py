@@ -95,7 +95,12 @@ class Gene:
             for exon_start, exon_stop in tr.exons:
                 exons["start"].append(exon_start)
                 exons["stop"].append(exon_stop)
-        exons["chr"] = tr.data["chr"]
+        if exons['start']:
+            exons["chr"] = tr.data["chr"]
+            exons["strand"] = tr.data["strand"]
+        else:
+            exons['chr'] = []
+            exons['strand'] = []
         exons = pd.DataFrame(exons)
         exons = merge_intervals(exons)
         return exons
@@ -112,8 +117,12 @@ class Gene:
             for exon_start, exon_stop in tr.exons:
                 exons["start"].append(exon_start)
                 exons["stop"].append(exon_stop)
-        exons["chr"] = tr.data["chr"]
-        exons["strand"] = tr.data["strand"]
+        if exons['start']:
+            exons["chr"] = tr.data["chr"]
+            exons["strand"] = tr.data["strand"]
+        else:
+            exons['chr'] = []
+            exons['strand'] = []
         exons = pd.DataFrame(exons)
         if len(exons) > 1:
             # exons = merge_intervals(exons)
