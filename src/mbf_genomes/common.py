@@ -182,21 +182,19 @@ class ProkaryoticCode(GeneticCode):
 
 
 def df_to_rows(df, columns_to_choose=None):
-    """Turn a DataFrame into a Dictionary
+    """Turn a DataFrame into named tuples
     index -> {columnA: X, columnB: Y}
-    You can then use that much faster than 
-    accessing df.loc[] repeatedly 
+    You can then use that much faster than
+    accessing df.loc[] repeatedly
     right now (2019-03-25) for whatever reason
     """
-    if columns_to_choose is None:
-        pass
+    if columns_to_choose is None:  # pragma: no branch
+        pass  # pragma: no cover
     else:
         df = df[columns_to_choose]
-    if df.index.duplicated().any():
+    if df.index.duplicated().any():  # pragma: no cover
         raise ValueError("df_to_rows needs a unique index")
     result = {}
-    for idx, row in df.iterrows():
-        result[idx ] = row
+    for row in df.itertuples():
+        result[row[0]] = row
     return result
-
-

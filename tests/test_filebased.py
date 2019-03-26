@@ -51,6 +51,7 @@ class TestFilebased:
                 assert False == should_file  # noqa:E712
         tf = g.df_transcripts
         assert "BAF35033" in tf.index
+        assert not hasattr(g, '_transcripts')
         assert tf.loc["BAF35033"].exons == ((1313, 2816),)
 
         gf = g.df_genes

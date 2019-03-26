@@ -1,5 +1,6 @@
 import pandas as pd
 from .intervals import merge_intervals
+import attr
 
 
 def _intron_intervals_from_exons(exons, gene_start, gene_stop, merge=False):
@@ -41,20 +42,24 @@ def _intron_intervals_from_exons(exons, gene_start, gene_stop, merge=False):
     return res
 
 
+@attr.s(slots=True)
 class Gene:
-    def __init__(self, genome, gene_stable_id):
-        self.genome = genome
-        self.gene_stable_id = gene_stable_id
+    gene_stable_id = attr.ib()
+    name = attr.ib()
+    chr = attr.ib()
+    start = attr.ib()
+    stop = attr.ib()
+    strand = attr.ib()
+    biotype = attr.ib()
+    transcripts = attr.ib(default=None)
 
     @property
-    def data(self):
-        return self.genome.df_genes.loc[self.gene_stable_id]
+    def tss(self):
+        return self.start if self.strand == 1 else self.stop
 
     @property
-    def transcript_ids(self):
-        return self.genome.df_transcripts[
-            self.genome.df_transcripts.gene_stable_id == self.gene_stable_id
-        ].index
+    def tes(self):
+        return self.start if self.strand != 1 else self.stop
 
     @property
     def introns(self):
@@ -62,13 +67,11 @@ class Gene:
         result is  [(start, stop),...]
 
         """
-        gene = self.data
-        gene_start = min(gene["tss"], gene["tes"])
-        gene_stop = max(gene["tss"], gene["tes"])
+        gene_start = self.start
+        gene_stop = self.stop
         introns = {"start": [], "stop": []}
         exons = []
-        for transcript_stable_id in self.transcript_ids:
-            tr = self.genome.transcript(transcript_stable_id)
+        for tr in self.transcripts:
             exons.extend(tr.exons)
 
         exons.sort()
@@ -78,52 +81,42 @@ class Gene:
         for start, stop in transcript_introns:
             introns["start"].append(start)
             introns["stop"].append(stop)
-        introns["chr"] = tr.data["chr"]
+        introns["chr"] = self.chr
         introns = pd.DataFrame(introns)
         introns = merge_intervals(introns)
         return list(zip(introns["start"], introns["stop"]))
 
     @property
-    def exons_merged(self):
-        """Get the merged exon regions for a gene given by gene_stable_id
-        result is a DataFrame{chr, start, stop}
-
-        """
+    def _exons(self):
+        """Common code to exons_merged and exons_overlapping"""
         exons = {"start": [], "stop": []}
-        for transcript_stable_id in self.transcript_ids:
-            tr = self.genome.transcript(transcript_stable_id)
+        for tr in self.transcripts:
             for exon_start, exon_stop in tr.exons:
                 exons["start"].append(exon_start)
                 exons["stop"].append(exon_stop)
-        if exons['start']:
-            exons["chr"] = tr.data["chr"]
-            exons["strand"] = tr.data["strand"]
+        if exons["start"]:
+            exons["chr"] = self.chr
+            exons["strand"] = self.strand
         else:
-            exons['chr'] = []
-            exons['strand'] = []
-        exons = pd.DataFrame(exons)
+            exons["chr"] = []
+            exons["strand"] = []
+        return pd.DataFrame(exons)
+
+    @property
+    def exons_merged(self):
+        """Get the merged exon regions for a gene given by gene_stable_id
+        result is a DataFrame{chr, start, stop}
+        """
+        exons = self._exons
         exons = merge_intervals(exons)
         return exons
 
     @property
     def exons_overlapping(self):
         """Get the overlapping exon regions for a gene given by gene_stable_id
-        result is a DataFrame{chr, start, stop}
-
+        result is a DataFrame{chr, strand, start, stop}
         """
-        exons = {"start": [], "stop": []}
-        for transcript_stable_id in self.transcript_ids:
-            tr = self.genome.transcript(transcript_stable_id)
-            for exon_start, exon_stop in tr.exons:
-                exons["start"].append(exon_start)
-                exons["stop"].append(exon_stop)
-        if exons['start']:
-            exons["chr"] = tr.data["chr"]
-            exons["strand"] = tr.data["strand"]
-        else:
-            exons['chr'] = []
-            exons['strand'] = []
-        exons = pd.DataFrame(exons)
+        exons = self._exons
         if len(exons) > 1:
             # exons = merge_intervals(exons)
             exons = exons.sort_values(["start", "stop"])
@@ -133,7 +126,7 @@ class Gene:
     def exons_protein_coding_merged(self):
         """Get the merged exon regions for a gene , only for protein coding exons.
         Empty result on non protein coding genes
-        result is a DataFrame{chr, start, stop}
+        result is a DataFrame{chr, strand, start, stop}
         """
         res = self.exons_protein_coding_overlapping
         return merge_intervals(res)
@@ -142,48 +135,46 @@ class Gene:
     def exons_protein_coding_overlapping(self):
         """Get the merged exon regions for a gene , only for protein coding exons.
         Empty result on non protein coding genes
-        result is a DataFrame{chr, start, stop}
+        result is a DataFrame{chr, strand, start, stop}
         """
         # New rule: if a gene has a single protein coding transcript, we only take protein coding transcripts
         # earlier on, we required the gene to be annotated as protein_coding.
         # but that's not strictly correct
         # for example polymorphismic_pseudogenes can have protein coding variants.
-        biotypes = self.genome.df_transcripts[
-            self.genome.df_transcripts.gene_stable_id == self.gene_stable_id
-        ]["biotype"]
-        if not (biotypes == "protein_coding").any():
-            return self.exons_overlapping
         exons = {"start": [], "stop": []}
-        for transcript_stable_id in self.transcript_ids:
-            tr = self.genome.transcript(transcript_stable_id)
-            if tr.data["biotype"] == "protein_coding":
+        found = False
+        for tr in self.transcripts:
+            if tr.biotype == "protein_coding":
+                found = True
                 for exon_start, exon_stop in tr.exons:
                     exons["start"].append(exon_start)
                     exons["stop"].append(exon_stop)
-        exons["chr"] = tr.data["chr"]
-        exons["strand"] = tr.data["strand"]
+        if not found:
+            return self.exons_overlapping
+        # no need to handle the empty exon case her, it's done in exon_overlapping
+        exons["chr"] = self.chr
+        exons["strand"] = self.strand
         exons = pd.DataFrame(exons)
-        # if len(exons) > 1:
-        # exons = merge_intervals(exons)
         return exons
 
 
+@attr.s(slots=True)
 class Transcript:
-    def __init__(self, genome, transcript_stable_id):
-        self.genome = genome
-        self.transcript_stable_id = transcript_stable_id
+    transcript_stable_id = attr.ib()
+    gene_stable_id = attr.ib()
+    name = attr.ib()
+    chr = attr.ib()
+    start = attr.ib()
+    stop = attr.ib()
+    strand = attr.ib()
+    biotype = attr.ib()
+    exons = attr.ib()
+    exon_stable_ids = attr.ib()
+    gene = attr.ib()
 
     @property
-    def data(self):
-        return self.genome.df_transcripts.loc[self.transcript_stable_id]
-
-    @property
-    def gene_id(self):
-        return self.data["gene_stable_id"]
-
-    @property
-    def exons(self):
-        return [(start, stop) for (start, stop) in self.data["exons"]]
+    def exons_tuples(self):
+        return [(start, stop) for (start, stop) in self.exons]
 
     @property
     def introns(self):
@@ -193,10 +184,7 @@ class Transcript:
         so if a gene, by any reason would extend beyond it's exons,
         that region would also be covered.
         """
-        print(self.genome.df_transcripts)
-        transcript_info = self.genome.df_transcripts.loc[self.transcript_stable_id]
-        gene_info = self.genome.df_genes.loc[transcript_info["gene_stable_id"]]
-        gene_start = min(gene_info["tss"], gene_info["tes"])
-        gene_stop = max(gene_info["tss"], gene_info["tes"])
-        exons = sorted(transcript_info["exons"])
+        gene_start = self.gene.start
+        gene_stop = self.gene.stop
+        exons = sorted(self.exons_tuples)
         return _intron_intervals_from_exons(exons, gene_start, gene_stop)

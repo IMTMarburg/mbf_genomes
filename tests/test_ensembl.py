@@ -280,16 +280,18 @@ class TestEnsembl:
     def test_genes_iterator(self, mock_download, shared_prebuild):
         g = EnsemblGenome("Ashbya_gossypii", 41, shared_prebuild)
         g.job_genes()
+        g.job_transcripts()
         ppg.run_pipegraph()
-        genes = list(g.genes)
+        genes = list(g.genes.values())
         assert len(genes) == len(g.df_genes)
         assert set([x.gene_stable_id for x in genes]) == set(g.df_genes.index)
 
     def test_transcript_iterator(self, mock_download, shared_prebuild):
         g = EnsemblGenome("Ashbya_gossypii", 41, shared_prebuild)
+        g.job_genes()
         g.job_transcripts()
         ppg.run_pipegraph()
-        transcripts = list(g.transcripts)
+        transcripts = list(g.transcripts.values())
         assert len(transcripts) == len(g.df_transcripts)
         assert set([x.transcript_stable_id for x in transcripts]) == set(
             g.df_transcripts.index

@@ -121,19 +121,16 @@ class FileBasedGenome(GenomeBase):
 
         def create(output_filename):
             with open(output_filename, "w") as op:
-                for (
-                    transcript_stable_id,
-                    transcript_info,
-                ) in self.df_transcripts.iterrows():
+                for tr in self.transcripts.values():
                     seq = ""
-                    for start, stop in transcript_info["exons"]:
+                    for start, stop in tr.exons:
                         seq += self.get_genome_sequence(
-                            transcript_info["chr"], start, stop
+                            tr.chr, start, stop
                         )
-                    if transcript_info["strand"] == -1:
+                    if tr.strand == -1:
                         seq = reverse_complement(seq)
                     seq = "".join(wrappedIterator(80)(seq))
-                    op.write(f">{transcript_stable_id}\n{seq}\n")
+                    op.write(f">{tr.transcript_stable_id}\n{seq}\n")
 
         job = ppg.FileGeneratingJob(self.cdna_fasta_filename, create).depends_on(
             self.job_transcripts(), self.genome_fasta_dependencies

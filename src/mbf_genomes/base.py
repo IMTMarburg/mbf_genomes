@@ -6,6 +6,7 @@ import pysam
 from .common import reverse_complement, df_to_rows
 from .gene import Gene, Transcript
 from mbf_externals.prebuild import PrebuildFileInvariantsExploding
+import weakref
 
 dp, X = dppd()
 
@@ -275,21 +276,55 @@ class GenomeBase(ABC):
         result = {k: pd.concat(dfs[k], sort=False) for k in dfs}
         return result
 
-    def gene(self, gene_stable_id):
-        return Gene(self, gene_stable_id)
-
-    def transcript(self, transcript_stable_id):
-        return Transcript(self, transcript_stable_id)
-
     @property
     def genes(self):
-        for gene_stable_id in self.df_genes.index:
-            yield self.gene(gene_stable_id)
+        """a  dictionary gene_stable_id -> gene.Gene
+        """
+        if not hasattr(self, "_genes"):
+            self.build_genes_and_transcripts()
+        return self._genes
 
     @property
     def transcripts(self):
-        for transcript_stable_id in self.df_transcripts.index:
-            yield self.transcript(transcript_stable_id)
+        """a  dictionary transcript_stable_id -> gene.Transcript"""
+        if not hasattr(self, "_transcripts"):
+            self.build_genes_and_transcripts()
+        return self._transcripts
+
+    def build_genes_and_transcripts(self):
+        genes = {}
+        for tup in self.df_genes.itertuples():
+            g = Gene(
+                tup[0],
+                tup.name,
+                tup.chr,
+                tup.start,
+                tup.stop,
+                tup.strand,
+                tup.biotype,
+                transcripts=[],
+            )
+            genes[tup[0]] = g
+        transcripts = {}
+        for tup in self.df_transcripts.itertuples():
+            g = genes[tup.gene_stable_id]
+            t = Transcript(
+                tup[0],
+                tup.gene_stable_id,
+                tup.name,
+                tup.chr,
+                tup.start,
+                tup.stop,
+                tup.strand,
+                tup.biotype,
+                tup.exons,
+                tup.exon_stable_ids,
+                weakref.proxy(g),
+            )
+            transcripts[tup[0]] = t
+            g.transcripts.append(t)
+        self._genes = genes
+        self._transcripts = transcripts
 
     @ReadOnlyPropertyWithFunctionAccess
     def df_exons(self):
@@ -303,19 +338,16 @@ class GenomeBase(ABC):
             "strand": [],
         }
         canonical_chromosomes = self.get_chromosome_lengths()
-        for (transcript_stable_id, transcript_row) in self.df_transcripts[
-            ["gene_stable_id", "chr", "strand", "exons"]
-        ].iterrows():
-            if not transcript_row["chr"] in canonical_chromosomes:  # pragma: no cover
+        for tr in self.transcripts.values():
+            if not tr.chr in canonical_chromosomes:  # pragma: no cover
                 continue
-            exons = transcript_row["exons"]
-            for start, stop in exons:
-                res["chr"].append(transcript_row["chr"])
+            for start, stop in tr.exons:
+                res["chr"].append(tr.chr)
                 res["start"].append(start)
                 res["stop"].append(stop)
-                res["transcript_stable_id"].append(transcript_stable_id)
-                res["gene_stable_id"].append(transcript_row["gene_stable_id"])
-                res["strand"].append(transcript_row["strand"])
+                res["transcript_stable_id"].append(tr.transcript_stable_id)
+                res["gene_stable_id"].append(tr.gene_stable_id)
+                res["strand"].append(tr.strand)
         return pd.DataFrame(res)
 
     def _prepare_df_genes(self):
@@ -410,8 +442,6 @@ class GenomeBase(ABC):
             biotype,
             exons  - list (start, stop)
         """
-        import time
-
         gtf = self.get_gtf(["transcript", "exon"])
         transcripts = gtf["transcript"]
         exons = gtf["exon"]
@@ -455,6 +485,8 @@ class GenomeBase(ABC):
                 stop=X.end,
                 strand=X.strand,
                 biotype=pd.Categorical(X.transcript_biotype),
+                msg_pack_fix=""  # stupid msg_pack writer will mess up the exon tuples
+                # if it has no str-object columns in the datafram.
             )
             .set_index("transcript_stable_id")
             .pd
@@ -491,13 +523,15 @@ class GenomeBase(ABC):
         ):  # pragma: no cover - defensive, currently handled in gtf parser
             raise ValueError(f"Transcript strand was outside of 1, -1: {strand_values}")
 
+        # can't use self.genes or self.transcript at this point,
+        # they rely on df_genes and df_transcripts being set
         genes = df_to_rows(self.df_genes, ["start", "stop"])
         for transcript_stable_id, start, stop, exons, gene_stable_id in zip(
             df_transcripts.index,
-            df_transcripts["start"],
-            df_transcripts["stop"],
-            df_transcripts["exons"],
-            df_transcripts["gene_stable_id"],
+            df_transcripts.start,
+            df_transcripts.stop,
+            df_transcripts.exons,
+            df_transcripts.gene_stable_id,
         ):
 
             if start > stop:
@@ -507,11 +541,10 @@ class GenomeBase(ABC):
                     raise ValueError(
                         f"Exon outside of transcript: {transcript_stable_id}"
                     )
-            continue
             gene_info = genes[gene_stable_id]
-            if start < gene_info["start"] or stop > gene_info["stop"]:
+            if start < gene_info.start or stop > gene_info.stop:
                 raise ValueError(
-                    f"Transcript outside of gene: {transcript_stable_id} {start} {stop} {gene_info['start']} {gene_info['stop']}"
+                    f"Transcript outside of gene: {transcript_stable_id} {start} {stop} {gene_info.start} {gene_info.stop}"
                 )
 
     def _prepare_df_proteins(self):
