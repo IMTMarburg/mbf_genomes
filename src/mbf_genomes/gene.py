@@ -11,6 +11,9 @@ def merge_exons(exons):
     which have the merged)
 
     This is much faster than the pandas based variants in intervals I'm afraid.
+
+    Converting this to cython shaves off about half a second (reduction to 87%)
+    from merging all exons of all genes of the human genome -> not worth it.
     """
     exons.sort()
     starts = np.array([x[0] for x in exons])
@@ -127,14 +130,14 @@ class Gene:
         for tr in self.transcripts:
             exons.extend(tr.exons)
         return exons
-   
+
     @property
     def exons_merged(self):
         """Get the merged exon regions for a gene given by gene_stable_id
         result is a a tuple of np arrays, (starts, stops)
         """
         return merge_exons(self._exons)
-        
+
     @property
     def exons_overlapping(self):
         """Get the overlapping exon regions for a gene given by gene_stable_id
@@ -146,16 +149,15 @@ class Gene:
     def _reformat_exons(self, exons):
         """Turn exons [(start, stop), ...] into [[start, ...], [stop, ...]
         """
-        res = np.array(exons)
-        res.sort(axis=0)
-        return res
+        exons.sort()
+        return np.array([x[0] for x in exons]), np.array([x[1] for x in exons])
 
     @property
     def _exons_protein_coding(self):
         """common code for the exons_protein_coding_* propertys"""
         exons = []
         for tr in self.transcripts:
-            if tr.biotype == 'protein_coding':
+            if tr.biotype == "protein_coding":
                 exons.extend(tr.exons)
         return exons
 
@@ -178,78 +180,7 @@ class Gene:
         because for example polymorphismic_pseudogenes can have protein coding variants.
         """
         return self._reformat_exons(self._exons_protein_coding)
-       
-    @property
-    def _df_exons(self):
-        """Common code to exons_merged and exons_overlapping"""
-        exons = {"start": [], "stop": []}
-        for tr in self.transcripts:
-            for exon_start, exon_stop in tr.exons:
-                exons["start"].append(exon_start)
-                exons["stop"].append(exon_stop)
-        if exons["start"]:
-            exons["chr"] = self.chr
-            exons["strand"] = self.strand
-        else:
-            exons["chr"] = []
-            exons["strand"] = []
-        return pd.DataFrame(exons)
 
-    @property
-    def df_exons_merged(self):
-        """Get the merged exon regions for a gene given by gene_stable_id
-        result is a DataFrame{chr, start, stop}
-        """
-        exons = self._df_exons
-        exons = merge_intervals(exons)
-        return exons
-
-    @property
-    def df_exons_overlapping(self):
-        """Get the overlapping exon regions for a gene given by gene_stable_id
-        result is a DataFrame{chr, strand, start, stop}
-        """
-        exons = self._df_exons
-        if len(exons) > 1:
-            # exons = merge_intervals(exons)
-            exons = exons.sort_values(["start", "stop"])
-        return exons
-
-    @property
-    def df_exons_protein_coding_merged(self):
-        """Get the merged exon regions for a gene , only for protein coding exons.
-        Empty result on non protein coding genes
-        result is a DataFrame{chr, strand, start, stop}
-        """
-        res = self.df_exons_protein_coding_overlapping
-        res =  merge_intervals(res)
-        return res
-
-    @property
-    def df_exons_protein_coding_overlapping(self):
-        """Get the merged exon regions for a gene , only for protein coding exons.
-        Empty result on non protein coding genes
-        result is a DataFrame{chr, strand, start, stop}
-        """
-        # New rule: if a gene has a single protein coding transcript, we only take protein coding transcripts
-        # earlier on, we required the gene to be annotated as protein_coding.
-        # but that's not strictly correct
-        # for example polymorphismic_pseudogenes can have protein coding variants.
-        exons = {"start": [], "stop": []}
-        found = False
-        for tr in self.transcripts:
-            if tr.biotype == "protein_coding":
-                found = True
-                for exon_start, exon_stop in tr.exons:
-                    exons["start"].append(exon_start)
-                    exons["stop"].append(exon_stop)
-        if not found:
-            return self.df_exons_overlapping
-        # no need to handle the empty exon case her, it's done in exon_overlapping
-        exons["chr"] = self.chr
-        exons["strand"] = self.strand
-        exons = pd.DataFrame(exons)
-        return exons
 
 @attr.s(slots=True)
 class Transcript:
