@@ -2,9 +2,11 @@ import numpy as np
 import pandas as pd
 
 
-def merge_intervals(df):
+def merge_intervals(df, extend_by=0):
     """take a {chr, start, end, *} dataframe and merge overlapping intervals.
     * is from the last entry.
+
+    extend_by = 1 allows you to merge intervals next to each other
 
     """
     if hasattr(df, "to_pandas"):  # pragma: no cover
@@ -12,7 +14,7 @@ def merge_intervals(df):
     df = df.sort_values(["chr", "start"], ascending=[True, True]).reset_index(
         drop=True
     )  # you need to do this here so it's true later...
-    keep = _merge_choose_rows_to_keep_and_update_positon(df)
+    keep = _merge_choose_rows_to_keep_and_update_positon(df, extend_by=extend_by)
     return df.loc[keep].reset_index(drop=True)
 
 
@@ -56,12 +58,10 @@ def merge_intervals_with_callback(df, callback):
     return res
 
 
-def _merge_choose_rows_to_keep_and_update_positon(df):
+def _merge_choose_rows_to_keep_and_update_positon(df, extend_by=0):
     """A helper for the merge_intervals and merge_intervals_with_callback functions that refactors some common code.
     Basically, updates continuous 'runs' of overlapping intervals so that the last one has start = start_of_first, end = end of longest,
     and then returns a boolean array with True if it's the last one"""
-    if hasattr(df, "to_pandas"):  # pragma: no cover
-        raise ValueError("pydataframe passed")
     chrs = np.array(df["chr"])
     starts = np.array(df["start"])
     stops = np.array(df["stop"])
@@ -74,13 +74,16 @@ def _merge_choose_rows_to_keep_and_update_positon(df):
     while ii < lendf:
         if chrs[ii] != last_chr:
             last_chr = chrs[ii]
-            last_stop = 0
-        if starts[ii] < last_stop:
+            last_stop = (
+                -1 * extend_by - 1
+            )  # must be so that last_stop(=none) + extend_by is still <0
+        if starts[ii] < last_stop + extend_by:
             starts[ii] = starts[last_row]
             stops[ii] = max(stops[ii], last_stop)
         else:
             if last_row is not None:
                 keep[last_row] = True
+                # no need to reset last_row, it get's set straight away
                 # new_rows.append(df.get_row(last_row))
         if stops[ii] > last_stop:
             last_stop = stops[ii]
