@@ -81,6 +81,7 @@ class FileBasedGenome(GenomeBase):
             "genes.gtf": self.gtf_filename,
             "proteins.fasta": self.protein_fasta_filename,
         }
+        self.download_genome()
 
     def prep_fasta(self, input_filenames, output_filename):
         if isinstance(input_filenames, ppg.Job):

@@ -2,7 +2,6 @@ import pytest
 from mbf_genomes import EnsemblGenome
 from mbf_externals import PrebuildManager
 from mbf_externals.aligners.subread import Subread
-from pathlib import Path
 import pypipegraph as ppg
 from pypipegraph.util import checksum_file
 
@@ -29,7 +28,6 @@ class TestEnsembl:
         )
         test_fasta_job.depends_on(g.download_genome())
         g._prebuilds.append(test_fasta_job)
-        g.job_proteins()
 
         subread = Subread(version="1.6.3")
         index = g.build_index(subread, "test.fasta")
@@ -83,7 +81,6 @@ class TestEnsembl:
         new_pipegraph.new_pipegraph()
         pb = PrebuildManager(shared_prebuild.prebuilt_path)
         g = EnsemblGenome(species, "41", prebuild_manager=pb)
-        g.download_genome()
         test_fasta_job = g.prebuild_manager.prebuild(
             f"ensembl/{g.species}_{g.revision}/test_fasta",
             "1",
@@ -92,7 +89,6 @@ class TestEnsembl:
             shorten_genome_fasta,
         )
         g._prebuilds.append(test_fasta_job)
-        g.job_proteins()
 
         subread_intermediate = Subread(version="1.5.0")
         index_intermediate = g.build_index(subread_intermediate, "test.fasta")
@@ -140,24 +136,14 @@ class TestEnsembl:
         with pytest.raises(ValueError):
             g.get_cds_sequence("AAS53315", g.df_proteins.loc["AAS53316"])
 
-    def test_download_jobs_called_by_index(
+    def test_download_jobs_called_init(
         self, new_pipegraph, mock_download, shared_prebuild
     ):
         species = (
             "Ashbya_gossypii"
         )  # the smallest eukaryotic species at the time of writing this at 2.8 mb
         g = EnsemblGenome(species, "41", prebuild_manager=shared_prebuild)
-        subread = Subread(version="1.6.3")
-        with pytest.raises(OSError):
-            g.find_prebuild("genome.fasta")
-        job = g.build_index(subread)
         g.find_prebuild("genome.fasta")  # this is the actual test.
-        for fn in job.filenames:
-            if Path(fn).exists():
-                Path(fn).unlink()
-        ppg.run_pipegraph()
-        for fn in job.filenames:
-            assert Path(fn).exists()
 
     def test_species_formating(self, shared_prebuild):
         species = (
@@ -176,8 +162,6 @@ class TestEnsembl:
 
     def test_all_genes(self, mock_download, shared_prebuild):
         g = EnsemblGenome("Ustilago_maydis", 33, shared_prebuild)
-        g.download_genome()
-        g.job_genes()
         ppg.run_pipegraph()
 
         df = g.df_genes
@@ -200,8 +184,6 @@ class TestEnsembl:
 
     def test_all_transcripts(self, mock_download, shared_prebuild):
         g = EnsemblGenome("Ustilago_maydis", 33, shared_prebuild)
-        g.download_genome()
-        assert isinstance(g.job_transcripts(), ppg.Job)
         ppg.run_pipegraph()
 
         df = g.df_transcripts
@@ -220,8 +202,6 @@ class TestEnsembl:
 
     def test_df_exons(self, mock_download, shared_prebuild):
         g = EnsemblGenome("Ustilago_maydis", 33, shared_prebuild)
-        g.download_genome()
-        assert isinstance(g.job_transcripts(), ppg.Job)
         ppg.run_pipegraph()
         ppg.util.global_pipegraph.test_keep_output = True
         ppg.util.global_pipegraph.dump_runtimes("logs/runtimes.txt")
@@ -233,8 +213,6 @@ class TestEnsembl:
 
     def test_all_proteins(self, mock_download, shared_prebuild):
         g = EnsemblGenome("Ustilago_maydis", 33, shared_prebuild)
-        g.download_genome()
-        g.job_proteins()
         ppg.run_pipegraph()
 
         df = g.df_proteins
@@ -243,8 +221,6 @@ class TestEnsembl:
     def test_transcript_ids(self, mock_download, shared_prebuild):
         # test that ustilago has at least one gene with multilpe transcripts
         g = EnsemblGenome("Ustilago_maydis", 33, shared_prebuild)
-        g.download_genome()
-        g.job_genes()
         ppg.run_pipegraph()
 
         df = g.df_genes
@@ -253,8 +229,6 @@ class TestEnsembl:
     def test_multiple_exon_transcripts(self, mock_download, shared_prebuild):
         # test that ustilago has at least one transcript with multiple exons
         g = EnsemblGenome("Ustilago_maydis", 33, shared_prebuild)
-        g.download_genome()
-        g.job_transcripts()
         ppg.run_pipegraph()
 
         df = g.df_transcripts
@@ -279,8 +253,6 @@ class TestEnsembl:
 
     def test_genes_iterator(self, mock_download, shared_prebuild):
         g = EnsemblGenome("Ashbya_gossypii", 41, shared_prebuild)
-        g.job_genes()
-        g.job_transcripts()
         ppg.run_pipegraph()
         genes = list(g.genes.values())
         assert len(genes) == len(g.df_genes)
@@ -288,11 +260,27 @@ class TestEnsembl:
 
     def test_transcript_iterator(self, mock_download, shared_prebuild):
         g = EnsemblGenome("Ashbya_gossypii", 41, shared_prebuild)
-        g.job_genes()
-        g.job_transcripts()
         ppg.run_pipegraph()
         transcripts = list(g.transcripts.values())
         assert len(transcripts) == len(g.df_transcripts)
         assert set([x.transcript_stable_id for x in transcripts]) == set(
             g.df_transcripts.index
         )
+
+    def test_outside_of_ppg_after_download(self, mock_download, shared_prebuild):
+        species = (
+            "Ashbya_gossypii"
+        )  # the smallest eukaryotic species at the time of writing this at 2.8 mb
+        g = EnsemblGenome(species, "41", prebuild_manager=shared_prebuild)
+        ppg.run_pipegraph()
+        len_genes = len(g.df_genes)
+        len_transcripts = len(g.df_transcripts)
+        len_proteins = len(g.df_proteins)
+        assert len_genes > 0
+        assert len_transcripts > 0
+        assert len_proteins > 0
+        ppg.util.global_pipegraph = None
+        g = EnsemblGenome(species, "41", prebuild_manager=shared_prebuild)
+        assert len_genes == len(g.df_genes)
+        assert len_transcripts == len(g.df_transcripts)
+        assert len_proteins == len(g.df_proteins)

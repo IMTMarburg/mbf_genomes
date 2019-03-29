@@ -20,8 +20,10 @@ class EnsemblGenome(GenomeBase):
             raise ValueError("Species must be capitalized like 'Homo_sapiens")
         self.revision = str(int(revision))
         self.name = f"{self.species}_{self.revision}"
-        ppg.util.assert_uniqueness_of_object(self)
+        if ppg.inside_ppg():
+            ppg.util.assert_uniqueness_of_object(self)
         self.genetic_code = EukaryoticCode
+        self.download_genome()
 
     @include_in_downloads
     def _pb_find_server(self):
@@ -66,7 +68,7 @@ class EnsemblGenome(GenomeBase):
             "gtf/" + self.species.lower() + "/",
             (fr"{self.species}\..+\.{self.revision}.gtf.gz",),
             "genes.gtf",
-        )
+        )  # can't have this unziped star wants it unziped
 
     def get_additional_gene_gtfs(self):
         if self.species == "Homo_sapiens":
@@ -93,7 +95,6 @@ class EnsemblGenome(GenomeBase):
 
     @property
     def gene_gtf_dependencies(self):
-        self.download_genome()  # so it's registered
         return [self._pb_download_gtf()]
 
     @include_in_downloads

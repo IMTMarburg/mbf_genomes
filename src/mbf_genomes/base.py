@@ -66,6 +66,7 @@ class MsgPackProperty:
 
 
 def msgpack_unpacking_class(cls):
+    msg_pack_properties = []
     for d in list(cls.__dict__):
         v = cls.__dict__[d]
         if isinstance(v, MsgPackProperty):
@@ -73,6 +74,7 @@ def msgpack_unpacking_class(cls):
                 raise NotImplementedError(
                     "Do not know how to create job name for msg_pack_properties that do not containt  _"
                 )
+            msg_pack_properties.append(d)
             job_name = "job_" + d[d.find("_") + 1 :]
             filename = d + ".msgpack"
             calc_func = getattr(cls, f"_prepare_{d}")
@@ -108,7 +110,7 @@ def msgpack_unpacking_class(cls):
                 setattr(cls, job_name, gen_job)
             else:  # pragma: no cover
                 pass
-
+    cls._msg_pack_properties = msg_pack_properties
     return cls
 
 
@@ -129,18 +131,23 @@ class GenomeBase(ABC):
         for method in self.__class__._download_methods:
             j = method(self)
             if isinstance(j, list):
-                if j:
+                if j is not None:
                     result.extend(j)
-            else:
+            elif j is not None:
                 result.append(j)
             # for j in result:
             # if isinstance(j, list):
             # raise ValueError(method)
         for j in self._download_jobs:
-            result.append(j)
+            if j is not None:
+                result.append(j)
         for j in result:
             if not j in self._prebuilds:  # pragma: no branch
                 self._prebuilds.append(j)
+        for msg_pack_prop in self.__class__._msg_pack_properties:
+            job_name = "job" + msg_pack_prop[msg_pack_prop.find("_") :]
+            j = getattr(self, job_name)()
+            self._prebuilds.append(j)
         return result
 
     def find_file(self, name):
@@ -579,18 +586,20 @@ class GenomeBase(ABC):
             "cds": [],
         }
 
-        for protein_stable_id, sub_df in cds.groupby("protein_id"):
-            transcript_stable_id = sub_df.transcript_id.iloc[0]
-            gene_stable_id = sub_df.gene_id.iloc[0]
-            chr = sub_df.seqname.iloc[0]
-            strand = sub_df.strand.iloc[0]
-            cds = list(zip(sub_df.start, sub_df.end))
-            result["protein_stable_id"].append(protein_stable_id)
+        for protein_stable_id, tuples in dp(cds).groupby("protein_id").itertuples():
+            transcript_stable_id = tuples[0].transcript_id
+            gene_stable_id = tuples[0].gene_id
+            chr = tuples[0].seqname
+            strand = tuples[0].strand
+            local_cds = list(
+                zip((tup.start for tup in tuples), (tup.end for tup in tuples))
+            )
+            result["protein_stable_id"].append(protein_stable_id[0])
             result["gene_stable_id"].append(gene_stable_id)
             result["transcript_stable_id"].append(transcript_stable_id)
             result["chr"].append(chr)
             result["strand"].append(strand)
-            result["cds"].append(cds)
+            result["cds"].append(local_cds)
         result = pd.DataFrame(result).set_index("protein_stable_id")
         return result
 
