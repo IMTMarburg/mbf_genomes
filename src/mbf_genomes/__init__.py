@@ -1,5 +1,4 @@
 from pathlib import Path
-from . import intervals
 from .base import GenomeBase, HardCodedGenome
 from .ensembl import EnsemblGenome
 from .filebased import FileBasedGenome, InteractiveFileBasedGenome
@@ -12,6 +11,5 @@ __all__ = [
     "FileBasedGenome",
     "InteractiveFileBasedGenome",
     "data_path",
-    "intervals",
     "HardCodedGenome",
 ]
