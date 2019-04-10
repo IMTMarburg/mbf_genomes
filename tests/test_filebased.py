@@ -5,9 +5,7 @@ from mbf_genomes import FileBasedGenome, InteractiveFileBasedGenome
 from mbf_genomes.common import iter_fasta, ProkaryoticCode
 from mbf_externals.util import UpstreamChangedError
 from pandas.testing import assert_frame_equal
-
-
-data_path = Path(__file__).parent.absolute() / "sample_data"
+from mbf_sampledata import get_sample_data
 
 
 @pytest.mark.usefixtures("new_pipegraph")
@@ -15,10 +13,12 @@ class TestFilebased:
     def test_indexing(self):
         g = FileBasedGenome(
             "Candidatus_carsonella",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz",
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz"
+            ),
+            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"),
+            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"),
+            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"),
         )
         g.download_genome()
         g.job_transcripts()
@@ -33,12 +33,15 @@ class TestFilebased:
         assert g.find_file("genome.fasta").with_suffix(".fasta.fai").exists()
         for should_file, actual_file in [
             (
-                data_path
-                / "Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz",
+                get_sample_data(
+                    "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz"
+                ),
                 g.find_file("genome.fasta"),
             ),
             (
-                data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz",
+                get_sample_data(
+                    "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"
+                ),
                 g.find_file("cdna.fasta"),
             ),
         ]:
@@ -51,7 +54,7 @@ class TestFilebased:
                 assert False == should_file  # noqa:E712
         tf = g.df_transcripts
         assert "BAF35033" in tf.index
-        assert not hasattr(g, '_transcripts')
+        assert not hasattr(g, "_transcripts")
         assert tf.loc["BAF35033"].exons == ((1313, 2816),)
 
         gf = g.df_genes
@@ -71,10 +74,12 @@ class TestFilebased:
     def test_cdna_creation(self):
         g = FileBasedGenome(
             "Candidatus_carsonella",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz",
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz"
+            ),
+            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"),
             None,
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz",
+            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"),
         )
         g.download_genome()
         g.job_transcripts()
@@ -87,7 +92,9 @@ class TestFilebased:
 
         should = dict(
             iter_fasta(
-                data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"
+                get_sample_data(
+                    "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"
+                )
             )
         )
         should = {k[: k.find(b" ")]: v for (k, v) in should.items()}
@@ -102,7 +109,9 @@ class TestFilebased:
     def test_empty_gtf_and_cdna_and_protein(self):
         g = FileBasedGenome(
             "Candidatus_carsonella",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz",
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz"
+            ),
             None,
             None,
         )
@@ -121,9 +130,11 @@ class TestFilebased:
     def test_protein_creation(self):
         g = FileBasedGenome(
             "Candidatus_carsonella",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz",
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz"
+            ),
+            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"),
+            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"),
             None,
             ProkaryoticCode(),
         )
@@ -133,7 +144,9 @@ class TestFilebased:
 
         should = dict(
             iter_fasta(
-                data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"
+                get_sample_data(
+                    "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"
+                )
             )
         )
         should = {k[: k.find(b" ")]: v for (k, v) in should.items()}
@@ -163,8 +176,9 @@ class TestFilebased:
             import shutil
 
             shutil.copy(
-                data_path
-                / "Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz",
+                get_sample_data(
+                    "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz"
+                ),
                 "shu.fasta.gz",
             )
 
@@ -172,9 +186,9 @@ class TestFilebased:
         g = FileBasedGenome(
             "Candidatus_carsonella",
             fasta_job,
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz",
+            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"),
             None,
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz",
+            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"),
         )
         g.download_genome()
         ppg.run_pipegraph()
@@ -212,13 +226,14 @@ class TestFilebased:
         g = FileBasedGenome(
             "Candidatus_carsonella",
             [
-                data_path
-                / "Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz",
+                get_sample_data(
+                    "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz"
+                ),
                 tf.name,
             ],
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz",
+            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"),
+            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"),
+            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"),
         )
         g.download_genome()
         ppg.run_pipegraph()
@@ -233,11 +248,12 @@ class TestFilebased:
         g = FileBasedGenome(
             "Candidatus_carsonella",
             [
-                data_path
-                / "Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz",
+                get_sample_data(
+                    "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz"
+                ),
                 tf.name,
             ],
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz",
+            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"),
             None,
         )
         g.download_genome()
@@ -247,13 +263,17 @@ class TestFilebased:
     def test_get_gtf_using_additional_gtf(self):
         g = FileBasedGenome(
             "Candidatus_carsonella",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz",
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz"
+            ),
+            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"),
+            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"),
+            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"),
         )
         g.get_additional_gene_gtf_filenames = lambda: [
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.42.additional.gtf.gz"
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.additional.gtf.gz"
+            )
         ]
         g.download_genome()
         j = g.job_genes()
@@ -261,8 +281,9 @@ class TestFilebased:
             if hasattr(x, "filenames"):
                 print(x, x.filenames)
                 if (
-                    data_path
-                    / "Candidatus_carsonella_ruddii_pv.ASM1036v1.42.additional.gtf.gz"
+                    get_sample_data(
+                        "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.additional.gtf.gz"
+                    )
                 ) in x.filenames:
                     break
         else:
@@ -273,13 +294,15 @@ class TestFilebased:
     def test_genes_unique_check(self):
         g = FileBasedGenome(
             "Candidatus_carsonella",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz",
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz"
+            ),
+            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"),
+            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"),
+            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"),
         )
         g.get_additional_gene_gtf_filenames = lambda: [
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"
+            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz")
         ]
         g.download_genome()
         job = g.job_genes()
@@ -290,14 +313,17 @@ class TestFilebased:
     def test_transcripts_unique_check(self):
         g = FileBasedGenome(
             "Candidatus_carsonella",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz",
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz"
+            ),
+            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"),
+            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"),
+            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"),
         )
         g.get_additional_gene_gtf_filenames = lambda: [
-            data_path
-            / "Candidatus_carsonella_ruddii_pv.ASM1036v1.42.more_transcripts.gtf.gz"
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.more_transcripts.gtf.gz"
+            )
         ]
         g.download_genome()
         job = g.job_transcripts()
@@ -308,10 +334,14 @@ class TestFilebased:
     def test_genes_wrong_start_stop_order(self):
         g = FileBasedGenome(
             "Candidatus_carsonella",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.42.broken.gtf.gz",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz",
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz"
+            ),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.broken.gtf.gz"
+            ),
+            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"),
+            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"),
         )
         job = g.job_genes()
         with pytest.raises(ppg.RuntimeError):
@@ -321,11 +351,14 @@ class TestFilebased:
     def test_transcript_wrong_order(self):
         g = FileBasedGenome(
             "Candidatus_carsonella",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz",
-            data_path
-            / "Candidatus_carsonella_ruddii_pv.ASM1036v1.transcript_wrong_order.gtf.gz",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz",
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz"
+            ),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.transcript_wrong_order.gtf.gz"
+            ),
+            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"),
+            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"),
         )
         job = g.job_transcripts()
         with pytest.raises(ppg.RuntimeError):
@@ -335,11 +368,14 @@ class TestFilebased:
     def test_transcript_exon_outside_transcript(self):
         g = FileBasedGenome(
             "Candidatus_carsonella",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz",
-            data_path
-            / "Candidatus_carsonella_ruddii_pv.ASM1036v1.transcript_exon_outside.gtf.gz",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz",
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz"
+            ),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.transcript_exon_outside.gtf.gz"
+            ),
+            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"),
+            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"),
         )
         job = g.job_transcripts()
         with pytest.raises(ppg.RuntimeError):
@@ -350,11 +386,14 @@ class TestFilebased:
     def test_transcript_transcript_outside_gene(self):
         g = FileBasedGenome(
             "Candidatus_carsonella",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz",
-            data_path
-            / "Candidatus_carsonella_ruddii_pv.ASM1036v1.transcript_outside_gene.gtf.gz",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz",
-            data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz",
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz"
+            ),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.transcript_outside_gene.gtf.gz"
+            ),
+            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"),
+            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"),
         )
         job = g.job_transcripts()
         with pytest.raises(ppg.RuntimeError):
@@ -363,9 +402,9 @@ class TestFilebased:
         assert isinstance(job.exception, ValueError)
 
     def test_example_genome_and_interactive(self, new_pipegraph):
-        from mbf_genomes import example_genomes
+        from mbf_genomes.testing import get_Candidatus_carsonella_ruddii_pv
 
-        g = example_genomes.get_Candidatus_carsonella_ruddii_pv()
+        g = get_Candidatus_carsonella_ruddii_pv()
         g.download_genome()
         g.job_genes()
         ppg.run_pipegraph()

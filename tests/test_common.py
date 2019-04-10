@@ -1,13 +1,11 @@
 import pytest
-from pathlib import Path
 from mbf_genomes.common import (
     reverse_complement,
     iter_fasta,
     EukaryoticCode,
     reverse_complement_iupac,
 )
-
-data_path = Path(__file__).parent.absolute() / "sample_data"
+from mbf_sampledata import get_sample_data
 
 
 def test_reverse_complement():
@@ -18,7 +16,7 @@ def test_reverse_complement():
 
 
 def test_iter_fasta():
-    fn = data_path / "Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz"
+    fn = get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz")
     a = list(iter_fasta(fn))
     assert len(a[0][1]) == 159662
     b = list(iter_fasta(fn, block_size=10))

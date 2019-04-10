@@ -1,11 +1,7 @@
 import pytest
 import numpy as np
-from pathlib import Path
 from mbf_genomes import HardCodedGenome
 import pandas as pd
-
-
-data_path = Path(__file__).parent.absolute() / "sample_data"
 
 default_chr_lengths = {
     "1": 100_000,
