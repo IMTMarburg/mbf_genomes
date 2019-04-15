@@ -1,7 +1,12 @@
 import re
 from pathlib import Path
 import mbf_externals
-from mbf_externals.util import download_file_and_gunzip, lazy_property, get_page
+from mbf_externals.util import (
+    download_file_and_gunzip,
+    lazy_property,
+    get_page,
+    lazy_method,
+)
 from .base import GenomeBase, include_in_downloads, class_with_downloads
 import pypipegraph as ppg
 from .common import EukaryoticCode
@@ -110,6 +115,28 @@ class EnsemblGenome(GenomeBase):
         )
 
     @include_in_downloads
+    def _pb_extract_keys_from_genome(self):
+        output_filename = "references.txt"
+
+        def extract(output_path):
+            from .common import iter_fasta
+
+            fn = self.find_file("genome.fasta")
+            keys = []
+            for key, seq in iter_fasta(fn):
+                keys.append(key)
+            (output_path / output_filename).write_bytes(b"\n".join(keys))
+
+        job = self.prebuild_manager.prebuild(
+            f"ensembl/{self.species}_{self.revision}/chromosomes_and_contigs",
+            "1",
+            [],
+            [output_filename],
+            extract,
+        ).depends_on(self._pb_download_genome_fasta())
+        return job
+
+    @include_in_downloads
     def _pb_download_cdna_fasta(self):
         return self._pb_download(
             "cdna",
@@ -185,3 +212,14 @@ class EnsemblGenome(GenomeBase):
         j.depends_on_func(property_name, callback_function)
         self._prebuilds.append(j)
         return j
+
+    @lazy_method
+    def get_true_chromosomes(self):
+        """Get the names of 'true' chromosomes, ie. no scaffolds/contigs
+        in genomes that have chromosomes, otherwise all"""
+        fn = self.find_file("references.txt")
+        keys = Path(fn).read_text().split("\n")
+        chroms = [x for x in keys if "chromosome:" in x]
+        if not chroms:
+            chroms = keys
+        return [x[: x.find(" ")] for x in chroms]

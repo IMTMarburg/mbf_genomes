@@ -6,6 +6,7 @@ import pysam
 from .common import reverse_complement, df_to_rows
 from .gene import Gene, Transcript
 from mbf_externals.prebuild import PrebuildFileInvariantsExploding
+from mbf_externals.util import lazy_method
 import weakref
 
 dp, X = dppd()
@@ -125,21 +126,22 @@ class GenomeBase(ABC):
     def _msg_pack_job(self, property_name, filename, callback_function):
         raise NotImplementedError  # pragma: no cover
 
+    @lazy_method
     def download_genome(self):
         """All the jobs needed to download the genome and prepare it for usage"""
         result = []
         for method in self.__class__._download_methods:
             j = method(self)
             if isinstance(j, list):
-                if j is not None:
+                if j is not None:  # pragma: no branch
                     result.extend(j)
-            elif j is not None:
+            elif j is not None:  # pragma: no branch
                 result.append(j)
             # for j in result:
             # if isinstance(j, list):
             # raise ValueError(method)
         for j in self._download_jobs:
-            if j is not None:
+            if j is not None:  # pragma: no branch
                 result.append(j)
         for j in result:
             if not j in self._prebuilds:  # pragma: no branch
@@ -216,19 +218,22 @@ class GenomeBase(ABC):
             minimum_acceptable_version=min_ver,
             maximum_acceptable_version=max_ver,
         )
-        try:
-            job.depends_on(self.find_prebuild(fasta_to_use))
-            job.depends_on(self.find_prebuild(gtf_to_use))
-        except OSError:
-            self.download_genome()  # so that the jobs are there
-            job.depends_on(self.find_prebuild(fasta_to_use))
-            job.depends_on(self.find_prebuild(gtf_to_use))
-
+        self.download_genome()  # so that the jobs are there
+        job.depends_on(self.find_prebuild(fasta_to_use))
+        job.depends_on(self.find_prebuild(gtf_to_use))
         return job
 
+    @lazy_method
     def get_chromosome_lengths(self):
+        """Return a dict name -> length for the primary assembly"""
         f = pysam.FastaFile(str(self.find_file("genome.fasta")))
         return dict(zip(f.references, f.lengths))
+
+    @lazy_method
+    def get_true_chromosomes(self):
+        """Get the names of 'true' chromosomes, ie. no scaffolds/contigs
+        in genomes that have chromosomes, otherwise all"""
+        return list(self.get_chromosome_lengths().keys())
 
     def get_genome_sequence(self, chr, start, stop):
         f = pysam.FastaFile(str(self.find_file("genome.fasta")))

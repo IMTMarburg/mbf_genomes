@@ -16,9 +16,15 @@ class TestFilebased:
             get_sample_data(
                 "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz"
             ),
-            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"),
-            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"),
-            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"
+            ),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"
+            ),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"
+            ),
         )
         g.download_genome()
         g.job_transcripts()
@@ -77,9 +83,13 @@ class TestFilebased:
             get_sample_data(
                 "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz"
             ),
-            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"
+            ),
             None,
-            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"
+            ),
         )
         g.download_genome()
         g.job_transcripts()
@@ -133,8 +143,12 @@ class TestFilebased:
             get_sample_data(
                 "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz"
             ),
-            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"),
-            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"
+            ),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"
+            ),
             None,
             ProkaryoticCode(),
         )
@@ -186,9 +200,13 @@ class TestFilebased:
         g = FileBasedGenome(
             "Candidatus_carsonella",
             fasta_job,
-            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"
+            ),
             None,
-            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"
+            ),
         )
         g.download_genome()
         ppg.run_pipegraph()
@@ -231,9 +249,15 @@ class TestFilebased:
                 ),
                 tf.name,
             ],
-            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"),
-            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"),
-            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"
+            ),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"
+            ),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"
+            ),
         )
         g.download_genome()
         ppg.run_pipegraph()
@@ -253,7 +277,9 @@ class TestFilebased:
                 ),
                 tf.name,
             ],
-            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"
+            ),
             None,
         )
         g.download_genome()
@@ -266,9 +292,15 @@ class TestFilebased:
             get_sample_data(
                 "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz"
             ),
-            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"),
-            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"),
-            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"
+            ),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"
+            ),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"
+            ),
         )
         g.get_additional_gene_gtf_filenames = lambda: [
             get_sample_data(
@@ -297,12 +329,20 @@ class TestFilebased:
             get_sample_data(
                 "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz"
             ),
-            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"),
-            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"),
-            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"
+            ),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"
+            ),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"
+            ),
         )
         g.get_additional_gene_gtf_filenames = lambda: [
-            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz")
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"
+            )
         ]
         g.download_genome()
         job = g.job_genes()
@@ -316,9 +356,15 @@ class TestFilebased:
             get_sample_data(
                 "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz"
             ),
-            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"),
-            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"),
-            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"
+            ),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"
+            ),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"
+            ),
         )
         g.get_additional_gene_gtf_filenames = lambda: [
             get_sample_data(
@@ -340,8 +386,12 @@ class TestFilebased:
             get_sample_data(
                 "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.broken.gtf.gz"
             ),
-            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"),
-            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"
+            ),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"
+            ),
         )
         job = g.job_genes()
         with pytest.raises(ppg.RuntimeError):
@@ -357,8 +407,12 @@ class TestFilebased:
             get_sample_data(
                 "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.transcript_wrong_order.gtf.gz"
             ),
-            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"),
-            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"
+            ),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"
+            ),
         )
         job = g.job_transcripts()
         with pytest.raises(ppg.RuntimeError):
@@ -374,8 +428,12 @@ class TestFilebased:
             get_sample_data(
                 "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.transcript_exon_outside.gtf.gz"
             ),
-            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"),
-            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"
+            ),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"
+            ),
         )
         job = g.job_transcripts()
         with pytest.raises(ppg.RuntimeError):
@@ -392,8 +450,12 @@ class TestFilebased:
             get_sample_data(
                 "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.transcript_outside_gene.gtf.gz"
             ),
-            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"),
-            get_sample_data("mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"
+            ),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"
+            ),
         )
         job = g.job_transcripts()
         with pytest.raises(ppg.RuntimeError):
@@ -402,7 +464,7 @@ class TestFilebased:
         assert isinstance(job.exception, ValueError)
 
     def test_example_genome_and_interactive(self, new_pipegraph):
-        from mbf_genomes.testing import get_Candidatus_carsonella_ruddii_pv
+        from mbf_sampledata import get_Candidatus_carsonella_ruddii_pv
 
         g = get_Candidatus_carsonella_ruddii_pv()
         g.download_genome()
@@ -436,3 +498,9 @@ class TestFilebased:
         ia.job_genes()
         assert ia2.get_chromosome_lengths() == g.get_chromosome_lengths()
         assert_frame_equal(ia2.df_genes, g.df_genes)
+
+    def test_get_true_chromosomes(self):
+        from mbf_sampledata import get_Candidatus_carsonella_ruddii_pv
+        g = get_Candidatus_carsonella_ruddii_pv()
+        ppg.run_pipegraph()
+        assert set(g.get_chromosome_lengths()) == set(g.get_true_chromosomes())
