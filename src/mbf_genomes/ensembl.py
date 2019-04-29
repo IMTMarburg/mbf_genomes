@@ -1,17 +1,27 @@
 import re
 from pathlib import Path
+import pandas as pd
 import mbf_externals
 from mbf_externals.util import (
     download_file_and_gunzip,
+    download_file_and_gzip,
+    download_file,
     lazy_property,
     get_page,
     lazy_method,
 )
-from .base import GenomeBase, include_in_downloads, class_with_downloads
+from .base import (
+    GenomeBase,
+    include_in_downloads,
+    class_with_downloads,
+    MsgPackProperty,
+    msgpack_unpacking_class,
+)
 import pypipegraph as ppg
 from .common import EukaryoticCode
 
 
+@msgpack_unpacking_class
 @class_with_downloads
 class EnsemblGenome(GenomeBase):
     def __init__(self, species, revision, prebuild_manager=None):
@@ -68,7 +78,7 @@ class EnsemblGenome(GenomeBase):
 
     @include_in_downloads
     def _pb_download_gtf(self):
-        return self._pb_download(
+        return self._pb_download_and_gunzip(
             "gtf",
             "gtf/" + self.species.lower() + "/",
             (fr"{self.species}\..+\.{self.revision}.gtf.gz",),
@@ -104,7 +114,7 @@ class EnsemblGenome(GenomeBase):
 
     @include_in_downloads
     def _pb_download_genome_fasta(self):
-        return self._pb_download(
+        return self._pb_download_and_gunzip(
             "dna",
             "fasta/" + self.species.lower() + "/dna/",
             (
@@ -138,7 +148,7 @@ class EnsemblGenome(GenomeBase):
 
     @include_in_downloads
     def _pb_download_cdna_fasta(self):
-        return self._pb_download(
+        return self._pb_download_and_gunzip(
             "cdna",
             "fasta/" + self.species.lower() + "/cdna/",
             (fr"{self.species}\..+\.cdna.all.fa.gz",),
@@ -147,14 +157,46 @@ class EnsemblGenome(GenomeBase):
 
     @include_in_downloads
     def _pb_download_proptein_fasta(self):
-        return self._pb_download(
+        return self._pb_download_and_gunzip(
             "pep",
             f"fasta/{self.species.lower()}/pep/",
             (fr"{self.species}\..+\.pep.all.fa.gz",),
             "pep.fasta",
         )
 
-    def _pb_download(self, pb_name, url, regexps, output_filename):
+    @include_in_downloads
+    def _pb_download_sql_table_definitions(self):
+        return self._pb_download_straight(
+            "sql/core/sql_def",
+            "mysql/",
+            (fr"{self.species.lower()}_core.+",),
+            "core.sql.gz",
+            lambda match: f"{match.strip()}/{match.strip()}.sql.gz",
+        )
+
+    def _pb_download_sql_table(self, table_name):
+        """Helper to download sql tables as mysql dumps"""
+        return self._pb_download_straight(
+            f"sql/core/{table_name}",
+            "mysql/",
+            (fr"{self.species.lower()}_core.+",),
+            f"{table_name}.txt.gz",
+            lambda match: f"{match.strip()}/{table_name.strip()}.txt.gz",
+        ).depends_on(self._pb_download_sql_table_definitions())
+
+    @include_in_downloads
+    def _pb_download_sql_table_gene(self):
+        return self._pb_download_sql_table("gene")
+
+    def _pb_download(
+        self,
+        pb_name,
+        url,
+        regexps,
+        output_filename,
+        download_func,
+        match_transformer=lambda x: x,
+    ):
         """regexps may be multiple - then the first one matching is used"""
 
         def do_download(output_path):
@@ -166,8 +208,9 @@ class EnsemblGenome(GenomeBase):
                 matches = re.findall(aregexps, raw)
                 if len(matches) == 1:
                     Path(output_filename + ".url").write_text((real_url + matches[0]))
-                    download_file_and_gunzip(
-                        real_url + matches[0], output_path / output_filename
+                    download_func(
+                        real_url + match_transformer(matches[0]),
+                        output_path / output_filename,
                     )
                     break
             else:
@@ -190,6 +233,29 @@ class EnsemblGenome(GenomeBase):
         )
         job.depends_on(self._pb_find_server())
         return job
+
+        return self._pb_download_job(pb_name, output_filename, do_download)
+
+    def _pb_download_straight(
+        self, pb_name, url, regexps, output_filename, match_transformer=lambda x: x
+    ):
+        def df(url, filename):
+            with open(filename, "wb") as op:
+                download_file(url, op)
+
+        return self._pb_download(
+            pb_name, url, regexps, output_filename, df, match_transformer
+        )
+
+    def _pb_download_and_gunzip(self, pb_name, url, regexps, output_filename):
+        return self._pb_download(
+            pb_name, url, regexps, output_filename, download_file_and_gunzip
+        )
+
+    def _pb_download_and_gzip(self, pb_name, url, regexps, output_filename):
+        return self._pb_download(
+            pb_name, url, regexps, output_filename, download_file_and_gzip
+        )
 
     @lazy_property
     def base_url(self):
@@ -223,3 +289,50 @@ class EnsemblGenome(GenomeBase):
         if not chroms:
             chroms = keys
         return [x[: x.find(" ")] for x in chroms]
+
+    def _prepare_df_genes_meta(self):
+        """Meta data for genes.
+        Currently contains:
+            'description'
+        """
+        columns = self._get_sql_table_column_names("gene")
+        if not "stable_id" in columns:
+            raise ValueError(
+                "No stable_id column found - "
+                "old ensembl, split into seperate table, add support code?"
+            )
+        df = pd.read_csv(
+            self.find_file("gene.txt.gz"),
+            sep="\t",
+            header=None,
+            names=columns,
+            usecols=["stable_id", "description"],
+        )
+        res = df.set_index("stable_id")
+        res.index.name = "gene_stable_id"
+        return res
+
+    df_genes_meta = MsgPackProperty(lambda self: [self._pb_download_sql_table_gene()])
+
+    def _get_sql_table_column_names(self, sql_table_name):
+        """Read the sql definition and extract column names"""
+        import gzip
+
+        with gzip.GzipFile(self.find_file("core.sql.gz")) as op:
+            raw = op.read().decode("utf-8")
+            for p in raw.split("\n-- Table structure")[1:]:
+                p = p[p.find("CREATE TABLE") :]
+                if "  PRIMARY" in p:
+                    p = p[: p.find("  PRIMARY")]
+                elif "  KEY" in p:
+                    p = p[: p.find("  KEY")]
+                elif "  UNIQUE" in p:
+                    p = p[: p.find("  UNIQUE")]
+
+                else:
+                    raise ValueError(p)
+                names = re.findall("`([^`]+)`", p)
+                table_name, *columns = names
+                if table_name == sql_table_name:
+                    return columns
+        raise KeyError(f"{sql_table_name} not in core.sql.gz")

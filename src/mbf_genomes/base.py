@@ -111,6 +111,8 @@ def msgpack_unpacking_class(cls):
                 setattr(cls, job_name, gen_job)
             else:  # pragma: no cover
                 pass
+    if hasattr(cls, '_msg_pack_properties'):
+        msg_pack_properties.extend(cls._msg_pack_properties)
     cls._msg_pack_properties = msg_pack_properties
     return cls
 

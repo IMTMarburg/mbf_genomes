@@ -136,6 +136,11 @@ class TestEnsembl:
         with pytest.raises(ValueError):
             g.get_cds_sequence("AAS53315", g.df_proteins.loc["AAS53316"])
 
+        assert (
+            g.df_genes_meta.loc["AGOS_ADL186C"]["description"]
+            == "Restriction of telomere capping protein 1 [Source:UniProtKB/Swiss-Prot;Acc:Q75AV6]"
+        )
+
     def test_download_jobs_called_init(
         self, new_pipegraph, mock_download, shared_prebuild
     ):
