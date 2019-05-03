@@ -207,7 +207,7 @@ class EnsemblGenome(GenomeBase):
             for aregexps in regexps:
                 matches = re.findall(aregexps, raw)
                 if len(matches) == 1:
-                    Path(output_filename + ".url").write_text((real_url + matches[0]))
+                    Path(output_path / output_filename + ".url").write_text((real_url + matches[0]))
                     download_func(
                         real_url + match_transformer(matches[0]),
                         output_path / output_filename,
