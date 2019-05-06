@@ -305,6 +305,9 @@ class GenomeBase(ABC):
             self.build_genes_and_transcripts()
         return self._transcripts
 
+    def name_to_gene_ids(self, name):
+        return set(self.df_genes.index[self.df_genes.name.str.upper() == name.upper()])
+
     def build_genes_and_transcripts(self):
         genes = {}
         for tup in self.df_genes.itertuples():

@@ -735,3 +735,51 @@ def test_gene_tss_tes():
     assert genome.genes["fake1"].tes == 4900
     assert genome.genes["fake2"].tss == 5400
     assert genome.genes["fake2"].tes == 4900
+
+def test_name_to_gene_id():
+    genome = DummyGenome(
+        pd.DataFrame(
+            [
+                {
+                    "gene_stable_id": "fake1",
+                    "chr": "1",
+                    "strand": 1,
+                    "tss": 3000,
+                    "tes": 4900,
+                    "description": "bla",
+                    "name": "bla1",
+                },
+                {
+                    "gene_stable_id": "fake2",
+                    "chr": "1",
+                    "strand": -1,
+                    "tss": 5400,
+                    "tes": 4900,
+                    "description": "bla",
+                    "name": "bla2",
+                },
+                {
+                    "gene_stable_id": "fake3",
+                    "chr": "2",
+                    "strand": -1,
+                    "tss": 5400,
+                    "tes": 4900,
+                    "description": "bla",
+                    "name": "bla3",
+                },
+                {
+                    "gene_stable_id": "fake4",
+                    "chr": "2",
+                    "strand": -1,
+                    "tss": 6400,
+                    "tes": 5900,
+                    "description": "bla",
+                    "name": "bla4",
+                },
+            ]
+        ),
+    )
+    assert genome.name_to_gene_ids('bla1') == set(['fake1'])
+    assert genome.name_to_gene_ids('bla2') == set(['fake2'])
+    assert genome.name_to_gene_ids('bla3') == set(['fake3'])
+    assert genome.name_to_gene_ids('bla4') == set(['fake4'])
