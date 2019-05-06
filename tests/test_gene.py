@@ -736,6 +736,7 @@ def test_gene_tss_tes():
     assert genome.genes["fake2"].tss == 5400
     assert genome.genes["fake2"].tes == 4900
 
+
 def test_name_to_gene_id():
     genome = DummyGenome(
         pd.DataFrame(
@@ -777,9 +778,9 @@ def test_name_to_gene_id():
                     "name": "bla4",
                 },
             ]
-        ),
+        )
     )
-    assert genome.name_to_gene_ids('bla1') == set(['fake1'])
-    assert genome.name_to_gene_ids('bla2') == set(['fake2'])
-    assert genome.name_to_gene_ids('bla3') == set(['fake3'])
-    assert genome.name_to_gene_ids('bla4') == set(['fake4'])
+    assert genome.name_to_gene_ids("bla1") == set(["fake1"])
+    assert genome.name_to_gene_ids("bla2") == set(["fake2"])
+    assert genome.name_to_gene_ids("bla3") == set(["fake3"])
+    assert genome.name_to_gene_ids("bla4") == set(["fake4"])

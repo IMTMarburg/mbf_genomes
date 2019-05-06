@@ -4,7 +4,7 @@ import pandas as pd
 import mbf_externals
 from mbf_externals.util import (
     download_file_and_gunzip,
-    download_file_and_gzip,
+    # download_file_and_gzip,
     download_file,
     lazy_property,
     get_page,
@@ -207,7 +207,9 @@ class EnsemblGenome(GenomeBase):
             for aregexps in regexps:
                 matches = re.findall(aregexps, raw)
                 if len(matches) == 1:
-                    Path(output_path / output_filename + ".url").write_text((real_url + matches[0]))
+                    Path(str(output_path / output_filename) + ".url").write_text(
+                        (real_url + matches[0])
+                    )
                     download_func(
                         real_url + match_transformer(matches[0]),
                         output_path / output_filename,
@@ -234,10 +236,13 @@ class EnsemblGenome(GenomeBase):
         job.depends_on(self._pb_find_server())
         return job
 
-        return self._pb_download_job(pb_name, output_filename, do_download)
-
     def _pb_download_straight(
-        self, pb_name, url, regexps, output_filename, match_transformer=lambda x: x
+        self,
+        pb_name,
+        url,
+        regexps,
+        output_filename,
+        match_transformer=lambda x: x,  # pragma: no cover
     ):
         def df(url, filename):
             with open(filename, "wb") as op:
@@ -252,10 +257,10 @@ class EnsemblGenome(GenomeBase):
             pb_name, url, regexps, output_filename, download_file_and_gunzip
         )
 
-    def _pb_download_and_gzip(self, pb_name, url, regexps, output_filename):
-        return self._pb_download(
-            pb_name, url, regexps, output_filename, download_file_and_gzip
-        )
+    # def _pb_download_and_gzip(self, pb_name, url, regexps, output_filename):
+    # return self._pb_download(
+    # pb_name, url, regexps, output_filename, download_file_and_gzip
+    # )
 
     @lazy_property
     def base_url(self):
@@ -296,7 +301,7 @@ class EnsemblGenome(GenomeBase):
             'description'
         """
         columns = self._get_sql_table_column_names("gene")
-        if not "stable_id" in columns:
+        if not "stable_id" in columns:  # pragma: no cover
             raise ValueError(
                 "No stable_id column found - "
                 "old ensembl, split into seperate table, add support code?"
@@ -329,10 +334,10 @@ class EnsemblGenome(GenomeBase):
                 elif "  UNIQUE" in p:
                     p = p[: p.find("  UNIQUE")]
 
-                else:
+                else:  # pragma: no cover
                     raise ValueError(p)
                 names = re.findall("`([^`]+)`", p)
                 table_name, *columns = names
                 if table_name == sql_table_name:
                     return columns
-        raise KeyError(f"{sql_table_name} not in core.sql.gz")
+        raise KeyError(f"{sql_table_name} not in core.sql.gz")  # pragma: no cover
