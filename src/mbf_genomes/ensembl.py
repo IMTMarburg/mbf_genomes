@@ -188,6 +188,10 @@ class EnsemblGenome(GenomeBase):
     def _pb_download_sql_table_gene(self):
         return self._pb_download_sql_table("gene")
 
+    @include_in_downloads
+    def _pb_download_sql_table_stable_id_event(self):
+        return self._pb_download_sql_table("stable_id_event")
+
     def _pb_download(
         self,
         pb_name,
@@ -329,10 +333,10 @@ class EnsemblGenome(GenomeBase):
                 p = p[p.find("CREATE TABLE") :]
                 if "  PRIMARY" in p:
                     p = p[: p.find("  PRIMARY")]
-                elif "  KEY" in p:
-                    p = p[: p.find("  KEY")]
                 elif "  UNIQUE" in p:
                     p = p[: p.find("  UNIQUE")]
+                elif "  KEY" in p:
+                    p = p[: p.find("  KEY")]
 
                 else:  # pragma: no cover
                     raise ValueError(p)
@@ -341,3 +345,52 @@ class EnsemblGenome(GenomeBase):
                 if table_name == sql_table_name:
                     return columns
         raise KeyError(f"{sql_table_name} not in core.sql.gz")  # pragma: no cover
+
+    def _prepare_lookup_stable_id_events(self):
+        """Lookup old_stable_id -> new_stable_id"""
+        columns = self._get_sql_table_column_names("stable_id_event")
+        print(columns)
+        print(self.find_file("stable_id_event.txt.gz")),
+        df = pd.read_csv(
+            self.find_file("stable_id_event.txt.gz"),
+            sep="\t",
+            header=None,
+            names=columns,
+            usecols=["old_stable_id", "new_stable_id"],
+            na_values="\\N"
+        )
+        lookup = {}
+        for row in df.itertuples():
+            old = row.old_stable_id
+            new = row.new_stable_id
+            if not old in lookup:
+                lookup[old] = set()
+            lookup[old].add(new)
+        return pd.DataFrame(
+            {"old": list(lookup.keys()), "new": [list(x) for x in lookup.values()]}
+        ).set_index("old")
+
+    lookup_stable_id_events = MsgPackProperty(
+        lambda self: [self._pb_download_sql_table_stable_id_event()]
+    )
+
+    def newest_stable_ids_for(self, stable_id):
+        """Get the most up to date and current stable_ids for genes, transcripts, proteins).
+        Plurarl for gene might have split, or have been deleted.
+        returns a set of new ids.
+ """
+        try:
+            valid_ids = set(self.df_genes.index)
+            valid_ids.update(self.df_transcripts.index)
+            valid_ids.update(self.df_proteins.index)
+            res = set(self.lookup_stable_id_events.loc[stable_id]["new"])
+            res = set(
+                [x for x in res if x in valid_ids]
+            )  # filter those that are no longer in the database - no matter that they were m             apped somewhere else in between
+            return res
+        except KeyError as e:
+            # see if it's a current id where we're simply lacking the stable_id_event for some reason
+            if stable_id in valid_ids:
+                return set([stable_id])
+            else:
+                raise e

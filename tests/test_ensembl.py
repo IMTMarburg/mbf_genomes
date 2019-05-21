@@ -645,3 +645,15 @@ class TestEnsembl:
 
         assert set(g.get_true_chromosomes()) == set(should)
         assert set(g.get_true_chromosomes()) == set(g.get_chromosome_lengths())
+
+    def test_newest_gene_ids(self, new_pipegraph, mock_download, shared_prebuild):
+        ppg.util.global_pipegraph.quiet = False
+        # the smallest eukaryotic species at the time of writing this at 2.8 mb
+        g = EnsemblGenome("Ustilago_maydis", 33, shared_prebuild)
+        ppg.run_pipegraph()
+        assert g.newest_stable_ids_for("UM05644") == set(["UMAG_05644"])
+        assert g.newest_stable_ids_for("UMAG_05629") == set(["UMAG_05629"])
+        assert g.newest_stable_ids_for("UM06501P0") == set([])
+        assert g.newest_stable_ids_for("UM04933T0") == set([])
+        with pytest.raises(KeyError):
+            g.newest_stable_ids_for("no_such_gene")
