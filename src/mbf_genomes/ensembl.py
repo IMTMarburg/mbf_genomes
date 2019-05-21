@@ -1,6 +1,7 @@
 import re
 from pathlib import Path
 import pandas as pd
+import numpy as np
 import mbf_externals
 from mbf_externals.util import (
     download_file_and_gunzip,
@@ -192,6 +193,18 @@ class EnsemblGenome(GenomeBase):
     def _pb_download_sql_table_stable_id_event(self):
         return self._pb_download_sql_table("stable_id_event")
 
+    @include_in_downloads
+    def _pb_download_sql_table_external_db(self):
+        return self._pb_download_sql_table("external_db")
+
+    @include_in_downloads
+    def _pb_download_sql_table_object_xref(self):
+        return self._pb_download_sql_table("object_xref")
+
+    @include_in_downloads
+    def _pb_download_sql_table_xref(self):
+        return self._pb_download_sql_table("xref")
+
     def _pb_download(
         self,
         pb_name,
@@ -299,24 +312,41 @@ class EnsemblGenome(GenomeBase):
             chroms = keys
         return [x[: x.find(" ")] for x in chroms]
 
+    def _load_from_sql(
+        self, table_name, columns=None, check_for_columns=None, **kwargs
+    ):
+        table_columns = self._get_sql_table_column_names(table_name)
+        df = pd.read_csv(
+            self.find_file(f"{table_name}.txt.gz"),
+            sep="\t",
+            header=None,
+            names=table_columns,
+            usecols=columns,
+            na_values="\\N",
+            lineterminator="\n",
+            escapechar="\\",
+            **kwargs,
+        )
+        if check_for_columns:
+            for c in check_for_columns:
+                if not c in table_columns:
+                    raise KeyError(c)
+        return df
+
     def _prepare_df_genes_meta(self):
         """Meta data for genes.
         Currently contains:
             'description'
         """
-        columns = self._get_sql_table_column_names("gene")
-        if not "stable_id" in columns:  # pragma: no cover
+        try:
+            df = self._load_from_sql(
+                "gene", ["stable_id", "description"], ["stable_id"]
+            )
+        except KeyError:
             raise ValueError(
                 "No stable_id column found - "
                 "old ensembl, split into seperate table, add support code?"
             )
-        df = pd.read_csv(
-            self.find_file("gene.txt.gz"),
-            sep="\t",
-            header=None,
-            names=columns,
-            usecols=["stable_id", "description"],
-        )
         res = df.set_index("stable_id")
         res.index.name = "gene_stable_id"
         return res
@@ -348,23 +378,13 @@ class EnsemblGenome(GenomeBase):
 
     def _prepare_lookup_stable_id_events(self):
         """Lookup old_stable_id -> new_stable_id"""
-        columns = self._get_sql_table_column_names("stable_id_event")
-        print(columns)
-        print(self.find_file("stable_id_event.txt.gz")),
-        df = pd.read_csv(
-            self.find_file("stable_id_event.txt.gz"),
-            sep="\t",
-            header=None,
-            names=columns,
-            usecols=["old_stable_id", "new_stable_id"],
-            na_values="\\N"
-        )
+        df = self._load_from_sql("stable_id_event", ["old_stable_id", "new_stable_id"])
         lookup = {}
-        for row in df.itertuples():
-            old = row.old_stable_id
-            new = row.new_stable_id
-            if not old in lookup:
-                lookup[old] = set()
+        olds = [str(x) for x in df["old_stable_id"].values]
+        news = [str(x) for x in df["new_stable_id"].values]
+        for old in olds:
+            lookup[old] = set()
+        for old, new in zip(olds, news):
             lookup[old].add(new)
         return pd.DataFrame(
             {"old": list(lookup.keys()), "new": [list(x) for x in lookup.values()]}
@@ -394,3 +414,47 @@ class EnsemblGenome(GenomeBase):
                 return set([stable_id])
             else:
                 raise e
+
+    def get_external_dbs(self):
+        """Return the names of all external dbs that actually have xrefs"""
+        df_external_db = self._load_from_sql(
+            "external_db", ["external_db_id", "db_name"]
+        )
+        with_data = set(
+            self._load_from_sql("xref", ["external_db_id"])["external_db_id"].unique()
+        )
+        return sorted(df_external_db["db_name"][
+            df_external_db["external_db_id"].isin(with_data)
+        ])
+
+    def get_external_db_to_gene_id_mapping(self, external_db_name):
+        """Return a dict external id -> set(stable_id, ...)
+        for a given external db - e.g. EntrezGene, list
+        with get_external_dbs()
+        """
+        df_external_db = self._load_from_sql(
+            "external_db", ["external_db_id", "db_name"]
+        ).set_index("db_name")
+        external_db_id = df_external_db.at[external_db_name, "external_db_id"]
+        xref = self._load_from_sql(
+            "xref", ["dbprimary_acc", "external_db_id", "xref_id"]
+        ).set_index("xref_id")
+        xref = xref[xref.external_db_id == external_db_id]
+        object_xref = self._load_from_sql(
+            "object_xref", ["ensembl_object_type", "xref_id", "ensembl_id"]
+        )
+        object_xref = object_xref[object_xref["ensembl_object_type"] == "Gene"]
+        object_xref = object_xref[object_xref.xref_id.isin(set(xref.index))]
+        result = {}
+        genes = self._load_from_sql("gene", ["gene_id", "stable_id"]).set_index(
+            "gene_id"
+        )
+        for internal_id, xref_id in zip(
+            object_xref["ensembl_id"].values, object_xref["xref_id"].values
+        ):
+            gene_stable_id = genes.at[internal_id, "stable_id"]
+            db_primary = xref.at[xref_id, "dbprimary_acc"]
+            if not db_primary in result:
+                result[db_primary] = set()
+            result[db_primary].add(gene_stable_id)
+        return result

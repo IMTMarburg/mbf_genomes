@@ -647,7 +647,6 @@ class TestEnsembl:
         assert set(g.get_true_chromosomes()) == set(g.get_chromosome_lengths())
 
     def test_newest_gene_ids(self, new_pipegraph, mock_download, shared_prebuild):
-        ppg.util.global_pipegraph.quiet = False
         # the smallest eukaryotic species at the time of writing this at 2.8 mb
         g = EnsemblGenome("Ustilago_maydis", 33, shared_prebuild)
         ppg.run_pipegraph()
@@ -657,3 +656,51 @@ class TestEnsembl:
         assert g.newest_stable_ids_for("UM04933T0") == set([])
         with pytest.raises(KeyError):
             g.newest_stable_ids_for("no_such_gene")
+
+    def test_get_external_dbs(self, new_pipegraph, mock_download, shared_prebuild):
+        g = EnsemblGenome("Ustilago_maydis", 33, shared_prebuild)
+        ppg.run_pipegraph()
+        assert g.get_external_dbs() == [
+            "BRENDA",
+            "BioCyc",
+            "ChEMBL",
+            "ENA_FEATURE_GENE",
+            "ENA_FEATURE_PROTEIN",
+            "ENA_FEATURE_TRANSCRIPT",
+            "ENA_GENE",
+            "Ensembl_Fungi",
+            "GO",
+            "GOA",
+            "IntAct",
+            "IntEnz",
+            "Interpro",
+            "KEGG",
+            "KEGG_Enzyme",
+            "MEROPS",
+            "MINT",
+            "MetaCyc",
+            "NCBI_TAXONOMY",
+            "PHI",
+            "PHIE",
+            "PHIP",
+            "PRIDE",
+            "PUBMED",
+            "PeroxiBase",
+            "Reactome",
+            "SWISS_MODEL",
+            "UniParc",
+            "UniPathway",
+            "Uniprot/SPTREMBL",
+            "Uniprot/SWISSPROT",
+            "protein_id",
+        ]
+
+    def test_external_db_mapping(self, new_pipegraph, mock_download, shared_prebuild):
+        ppg.util.global_pipegraph.quiet = False
+        # the smallest eukaryotic species at the time of writing this at 2.8 mb
+        g = EnsemblGenome("Ustilago_maydis", 33, shared_prebuild)
+        ppg.run_pipegraph()
+        goa = g.get_external_db_to_gene_id_mapping("GOA")
+        assert goa["A0A0D1CJ64"] == set(["UMAG_05734"])
+        with pytest.raises(KeyError):
+            g.get_external_db_to_gene_id_mapping("GOAnosuchthing")
