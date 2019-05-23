@@ -473,7 +473,6 @@ class EnsemblGenome(GenomeBase):
             columns={"gene_stable_id": "stable_id"}
         )
         df = df.join(gene_df.set_index("gene_id"), "gene_id")
-        print(df.head())
         return df
 
     def name_to_canonical_id(self, name):
