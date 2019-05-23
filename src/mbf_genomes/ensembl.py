@@ -1,7 +1,6 @@
 import re
 from pathlib import Path
 import pandas as pd
-import numpy as np
 import mbf_externals
 from mbf_externals.util import (
     download_file_and_gunzip,
@@ -22,13 +21,32 @@ import pypipegraph as ppg
 from .common import EukaryoticCode
 
 
+def EnsemblGenome(species, revision, prebuild_manager=None):
+    if prebuild_manager is None:  # pragma: no cover
+        prebuild_manager = mbf_externals.get_global_manager()
+    if ppg.util.global_pipegraph is not None:
+        if not hasattr(ppg.util.global_pipegraph, "_ensembl_genome_dedup"):
+            ppg.util.global_pipegraph._ensembl_genome_dedup = {}
+        if (species, revision) in ppg.util.global_pipegraph._ensembl_genome_dedup:
+            res = ppg.util.global_pipegraph._ensembl_genome_dedup[species, revision]
+            if res.prebuild_manager != prebuild_manager:  # pragma: no cover
+                raise ValueError(
+                    "Changing prebuild manager within one pipegraph is not supported"
+                )
+            return res
+        else:
+            res = _EnsemblGenome(species, revision, prebuild_manager)
+            ppg.util.global_pipegraph._ensembl_genome_dedup[species, revision] = res
+            return res
+    else:
+        return _EnsemblGenome(species, revision, prebuild_manager)
+
+
 @msgpack_unpacking_class
 @class_with_downloads
-class EnsemblGenome(GenomeBase):
-    def __init__(self, species, revision, prebuild_manager=None):
+class _EnsemblGenome(GenomeBase):
+    def __init__(self, species, revision, prebuild_manager):
         super().__init__()
-        if prebuild_manager is None:  # pragma: no cover
-            prebuild_manager = mbf_externals.get_global_manager()
         self.prebuild_manager = prebuild_manager
 
         self.species = species
@@ -496,10 +514,10 @@ class EnsemblGenome(GenomeBase):
             ]
             if len(on_primary) == 1:
                 return on_primary[0]
-            elif len(on_primary) == 0:
-                #if self.species == "Homo_sapiens" and name == "HLA-DRB3": # HLA-DRB3 is not in genes.gtf!
-                    # known issue - return basically any of the candidates on alternate regions, but be consistent.
-                    #return sorted(ag_candidates)[0]
+            elif len(on_primary) == 0:  # pragma: no cover
+                # if self.species == "Homo_sapiens" and name == "HLA-DRB3": # HLA-DRB3 is not in genes.gtf!
+                # known issue - return basically any of the candidates on alternate regions, but be consistent.
+                # return sorted(ag_candidates)[0]
                 raise ValueError("No primary gene found for %s" % name)
             else:
                 raise ValueError(

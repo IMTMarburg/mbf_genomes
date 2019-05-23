@@ -705,19 +705,28 @@ class TestEnsembl:
         with pytest.raises(KeyError):
             g.get_external_db_to_gene_id_mapping("GOAnosuchthing")
 
-    @patch('pypipegraph.util.checksum_file', return_value='5')
+    @patch("pypipegraph.util.checksum_file", return_value="5")
     def test_get_canonical_ids(self, new_pipegraph, mock_download, shared_prebuild):
         g = EnsemblGenome("Homo_sapiens", 96, shared_prebuild)
         g._pb_find_server().callback()
-        g._pb_download_sql_table('gene').callback()
-        g._pb_download_sql_table('alt_allele').callback()
-        g._pb_download_sql_table('seq_region').callback()
-        g._pb_download_sql_table('seq_region_attrib').callback()
-        g._pb_download_sql_table('attrib_type').callback()
+        g._pb_download_sql_table("gene").callback()
+        g._pb_download_sql_table("alt_allele").callback()
+        g._pb_download_sql_table("seq_region").callback()
+        g._pb_download_sql_table("seq_region_attrib").callback()
+        g._pb_download_sql_table("attrib_type").callback()
         g._pb_download_gtf().callback()
         g._pb_download_sql_table_definitions().callback()
         g.job_genes().callback()
         # g.job_transcripts().callback()
-        assert g.name_to_canonical_id('DSEL') == 'ENSG00000171451'
-        assert g.name_to_canonical_id('THEMIS') == 'ENSG00000172673'
+        assert g.name_to_canonical_id("DSEL") == "ENSG00000171451"
+        assert g.name_to_canonical_id("THEMIS") == "ENSG00000172673"
         # assert g.name_to_canonical_id('HLA-DRB3') == 'ENSG00000230463'
+
+    def test_same_same(self, new_pipegraph):
+        g = EnsemblGenome("Ustilago_maydis", 33)
+        g2 = EnsemblGenome("Ustilago_maydis", 33)
+        assert g is g2
+        new_pipegraph.new_pipegraph()
+        g3 = EnsemblGenome("Ustilago_maydis", 33)
+        assert g is not g3
+
