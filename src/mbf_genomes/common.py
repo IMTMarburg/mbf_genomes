@@ -160,7 +160,7 @@ class GeneticCode(ABC):
                 if len(codon) < 3:
                     raise ValueError("No stop codon found")
                 else:
-                    raise NotImplementedError(
+                    raise NotImplementedError(  # pragma: no cover
                         "Incomplete genetic code?, codon %s not found" % codon
                     )
         return proteinseq

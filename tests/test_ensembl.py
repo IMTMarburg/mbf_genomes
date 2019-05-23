@@ -4,6 +4,7 @@ from mbf_externals import PrebuildManager
 from mbf_externals.aligners.subread import Subread
 import pypipegraph as ppg
 from pypipegraph.util import checksum_file
+from unittest.mock import patch
 
 
 @pytest.mark.usefixtures("new_pipegraph")
@@ -696,7 +697,6 @@ class TestEnsembl:
         ]
 
     def test_external_db_mapping(self, new_pipegraph, mock_download, shared_prebuild):
-        ppg.util.global_pipegraph.quiet = False
         # the smallest eukaryotic species at the time of writing this at 2.8 mb
         g = EnsemblGenome("Ustilago_maydis", 33, shared_prebuild)
         ppg.run_pipegraph()
@@ -704,3 +704,20 @@ class TestEnsembl:
         assert goa["A0A0D1CJ64"] == set(["UMAG_05734"])
         with pytest.raises(KeyError):
             g.get_external_db_to_gene_id_mapping("GOAnosuchthing")
+
+    @patch('pypipegraph.util.checksum_file', return_value='5')
+    def test_get_canonical_ids(self, new_pipegraph, mock_download, shared_prebuild):
+        g = EnsemblGenome("Homo_sapiens", 96, shared_prebuild)
+        g._pb_find_server().callback()
+        g._pb_download_sql_table('gene').callback()
+        g._pb_download_sql_table('alt_allele').callback()
+        g._pb_download_sql_table('seq_region').callback()
+        g._pb_download_sql_table('seq_region_attrib').callback()
+        g._pb_download_sql_table('attrib_type').callback()
+        g._pb_download_gtf().callback()
+        g._pb_download_sql_table_definitions().callback()
+        g.job_genes().callback()
+        # g.job_transcripts().callback()
+        assert g.name_to_canonical_id('DSEL') == 'ENSG00000171451'
+        assert g.name_to_canonical_id('THEMIS') == 'ENSG00000172673'
+        # assert g.name_to_canonical_id('HLA-DRB3') == 'ENSG00000230463'

@@ -40,6 +40,7 @@ class EnsemblGenome(GenomeBase):
             ppg.util.assert_uniqueness_of_object(self)
         self.genetic_code = EukaryoticCode
         self.download_genome()
+        self._seq_region_is_canonical = {}
 
     @include_in_downloads
     def _pb_find_server(self):
@@ -157,7 +158,7 @@ class EnsemblGenome(GenomeBase):
         )
 
     @include_in_downloads
-    def _pb_download_proptein_fasta(self):
+    def _pb_download_protein_fasta(self):
         return self._pb_download_and_gunzip(
             "pep",
             f"fasta/{self.species.lower()}/pep/",
@@ -177,33 +178,31 @@ class EnsemblGenome(GenomeBase):
 
     def _pb_download_sql_table(self, table_name):
         """Helper to download sql tables as mysql dumps"""
-        return self._pb_download_straight(
+        job = self._pb_download_straight(
             f"sql/core/{table_name}",
             "mysql/",
             (fr"{self.species.lower()}_core.+",),
             f"{table_name}.txt.gz",
             lambda match: f"{match.strip()}/{table_name.strip()}.txt.gz",
         ).depends_on(self._pb_download_sql_table_definitions())
+        job.table_name = table_name
+        return job
 
     @include_in_downloads
-    def _pb_download_sql_table_gene(self):
-        return self._pb_download_sql_table("gene")
-
-    @include_in_downloads
-    def _pb_download_sql_table_stable_id_event(self):
-        return self._pb_download_sql_table("stable_id_event")
-
-    @include_in_downloads
-    def _pb_download_sql_table_external_db(self):
-        return self._pb_download_sql_table("external_db")
-
-    @include_in_downloads
-    def _pb_download_sql_table_object_xref(self):
-        return self._pb_download_sql_table("object_xref")
-
-    @include_in_downloads
-    def _pb_download_sql_table_xref(self):
-        return self._pb_download_sql_table("xref")
+    @lazy_method
+    def _pb_download_sql_tables(self):
+        tables = [
+            ("gene"),  # for description
+            ("stable_id_event"),  # for stable_id changes
+            ("external_db"),  # for external name lookup
+            ("object_xref"),  # for external name lookup
+            ("xref"),  # for external name lookup
+            ("alt_allele"),  # for finding 'canonical' ids
+            ("seq_region"),  # for finding 'canonical' ids
+            ("seq_region_attrib"),  # for finding 'canonical' ids
+            ("attrib_type"),  # for finding 'canonical' ids
+        ]
+        return [self._pb_download_sql_table(x) for x in tables]
 
     def _pb_download(
         self,
@@ -329,7 +328,7 @@ class EnsemblGenome(GenomeBase):
         )
         if check_for_columns:
             for c in check_for_columns:
-                if not c in table_columns:
+                if not c in table_columns:  # pragma: no cover
                     raise KeyError(c)
         return df
 
@@ -342,7 +341,7 @@ class EnsemblGenome(GenomeBase):
             df = self._load_from_sql(
                 "gene", ["stable_id", "description"], ["stable_id"]
             )
-        except KeyError:
+        except KeyError:  # pragma: no cover
             raise ValueError(
                 "No stable_id column found - "
                 "old ensembl, split into seperate table, add support code?"
@@ -351,7 +350,11 @@ class EnsemblGenome(GenomeBase):
         res.index.name = "gene_stable_id"
         return res
 
-    df_genes_meta = MsgPackProperty(lambda self: [self._pb_download_sql_table_gene()])
+    df_genes_meta = MsgPackProperty(
+        lambda self: [
+            x for x in self._pb_download_sql_tables() if x.table_name == "gene"
+        ]
+    )
 
     def _get_sql_table_column_names(self, sql_table_name):
         """Read the sql definition and extract column names"""
@@ -391,7 +394,11 @@ class EnsemblGenome(GenomeBase):
         ).set_index("old")
 
     lookup_stable_id_events = MsgPackProperty(
-        lambda self: [self._pb_download_sql_table_stable_id_event()]
+        lambda self: [
+            x
+            for x in self._pb_download_sql_tables()
+            if x.table_name == "stable_id_event"
+        ]
     )
 
     def newest_stable_ids_for(self, stable_id):
@@ -423,9 +430,9 @@ class EnsemblGenome(GenomeBase):
         with_data = set(
             self._load_from_sql("xref", ["external_db_id"])["external_db_id"].unique()
         )
-        return sorted(df_external_db["db_name"][
-            df_external_db["external_db_id"].isin(with_data)
-        ])
+        return sorted(
+            df_external_db["db_name"][df_external_db["external_db_id"].isin(with_data)]
+        )
 
     def get_external_db_to_gene_id_mapping(self, external_db_name):
         """Return a dict external id -> set(stable_id, ...)
@@ -458,3 +465,55 @@ class EnsemblGenome(GenomeBase):
                 result[db_primary] = set()
             result[db_primary].add(gene_stable_id)
         return result
+
+    @lazy_property
+    def allele_groups(self):
+        df = self._load_from_sql("alt_allele", ["alt_allele_group_id", "gene_id"])
+        gene_df = self._load_from_sql("gene", ["gene_id", "stable_id"]).rename(
+            columns={"gene_stable_id": "stable_id"}
+        )
+        df = df.join(gene_df.set_index("gene_id"), "gene_id")
+        print(df.head())
+        return df
+
+    def name_to_canonical_id(self, name):
+        """Given a gene name, lookup up it's stable ids, and return the
+        one that's on the primary assembly from the allele group"""
+        name_candidates = set(
+            [x for x in self.name_to_gene_ids(name) if not x.startswith("LRG")]
+        )
+        if not name_candidates:  # pragma: no cover
+            raise KeyError("No gene named %s" % name)
+        ag = self.allele_groups
+        ag_ids = ag.alt_allele_group_id[ag.stable_id.isin(name_candidates)].unique()
+        ag_candidates = set(ag.stable_id[ag.alt_allele_group_id.isin(ag_ids)])
+        if len(ag_ids) == 1 and name_candidates.issubset(ag_candidates):
+            # the easy case, everything matches
+            on_primary = [
+                x
+                for x in ag_candidates
+                if x
+                in self.df_genes.index  # for there is no entry in genes.gtf if it's not on a not 'non_ref' chromosome.
+            ]
+            if len(on_primary) == 1:
+                return on_primary[0]
+            elif len(on_primary) == 0:
+                #if self.species == "Homo_sapiens" and name == "HLA-DRB3": # HLA-DRB3 is not in genes.gtf!
+                    # known issue - return basically any of the candidates on alternate regions, but be consistent.
+                    #return sorted(ag_candidates)[0]
+                raise ValueError("No primary gene found for %s" % name)
+            else:
+                raise ValueError(
+                    "Multiple gene on primary assemblies found for %s" % name
+                )
+        elif len(ag_ids) == 0 and len(name_candidates) == 1:
+            # another easy case, there are no alternatives
+            return list(name_candidates)[0]
+        else:
+            raise ValueError(
+                "Could not determine canonical gene for '%s'. use name_to_gene_ids()"
+                " and have a look yourself (don't forget the allele groups).\n"
+                "Name candidates: %s\n"
+                "AG candidates: %s\n"
+                "AG ids: %s" % (name, name_candidates, ag_candidates, ag_ids)
+            )
