@@ -729,4 +729,3 @@ class TestEnsembl:
         new_pipegraph.new_pipegraph()
         g3 = EnsemblGenome("Ustilago_maydis", 33)
         assert g is not g3
-
