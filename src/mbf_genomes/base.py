@@ -8,6 +8,7 @@ from .gene import Gene, Transcript
 from mbf_externals.prebuild import PrebuildFileInvariantsExploding
 from mbf_externals.util import lazy_method
 import weakref
+import numpy as np
 
 dp, X = dppd()
 
@@ -111,7 +112,7 @@ def msgpack_unpacking_class(cls):
                 setattr(cls, job_name, gen_job)
             else:  # pragma: no cover
                 pass
-    if hasattr(cls, '_msg_pack_properties'):
+    if hasattr(cls, "_msg_pack_properties"):
         msg_pack_properties.extend(cls._msg_pack_properties)
     cls._msg_pack_properties = msg_pack_properties
     return cls
@@ -631,6 +632,17 @@ class GenomeBase(ABC):
             )
         return res
 
+    def get_genes_overlapping(self, chr, start, stop):
+        check_overlap = lambda df, interval: np.max(
+            [
+                np.zeros(len(df)),
+                np.min([df.stop.values, np.ones(len(df), dtype=int) * interval[1]], axis=0)
+                - np.max([df.start.values, np.ones(len(df), dtype=int) * interval[0]], axis=0),
+            ],
+            axis=0,
+        )
+        filter = (self.df_genes["chr"] == chr) & (check_overlap(self.df_genes, [start, stop]) > 0)
+        return self.df_genes[filter]
 
 @class_with_downloads
 class HardCodedGenome(GenomeBase):
