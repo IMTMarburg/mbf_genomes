@@ -60,6 +60,9 @@ class _EnsemblGenome(GenomeBase):
         self.download_genome()
         self._seq_region_is_canonical = {}
 
+    def __repr__(self):
+        return f"EnsemblGenome({self.species}, {self.revision})"
+
     @include_in_downloads
     def _pb_find_server(self):
         ensembl_urls = [
