@@ -10,6 +10,7 @@ from mbf_externals.util import lazy_method
 import weakref
 import numpy as np
 import pandas_msgpack
+
 pd.read_msgpack = pandas_msgpack.read_msgpack
 
 dp, X = dppd()
@@ -633,28 +634,6 @@ class GenomeBase(ABC):
                 )
             )
         return res
-
-    def get_genes_overlapping(self, chr, start, stop):
-        def check_overlap(df, interval):
-            return np.max(
-                [
-                    np.zeros(len(df)),
-                    np.min(
-                        [df.stop.values, np.ones(len(df), dtype=int) * interval[1]],
-                        axis=0,
-                    )
-                    - np.max(
-                        [df.start.values, np.ones(len(df), dtype=int) * interval[0]],
-                        axis=0,
-                    ),
-                ],
-                axis=0,
-            )
-
-        filter = (self.df_genes["chr"] == chr) & (
-            check_overlap(self.df_genes, [start, stop]) > 0
-        )
-        return self.df_genes[filter]
 
 
 @class_with_downloads
