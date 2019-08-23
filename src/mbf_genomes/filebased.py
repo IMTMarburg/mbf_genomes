@@ -3,6 +3,9 @@ from pathlib import Path
 from .base import GenomeBase, include_in_downloads, class_with_downloads
 from .common import reverse_complement, iter_fasta, wrappedIterator, EukaryoticCode
 from mbf_externals.prebuild import PrebuildFileInvariantsExploding
+import pandas_msgpack
+import pandas as pd
+pd.to_msgpack = pandas_msgpack.to_msgpack
 
 
 @class_with_downloads

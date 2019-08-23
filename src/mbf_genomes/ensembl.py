@@ -19,6 +19,8 @@ from .base import (
 )
 import pypipegraph as ppg
 from .common import EukaryoticCode
+import pandas_msgpack
+pd.to_msgpack = pandas_msgpack.to_msgpack
 
 
 def EnsemblGenome(species, revision, prebuild_manager=None):
