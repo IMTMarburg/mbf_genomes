@@ -8,7 +8,6 @@ from .gene import Gene, Transcript
 from mbf_externals.prebuild import PrebuildFileInvariantsExploding
 from mbf_externals.util import lazy_method
 import weakref
-import numpy as np
 import pandas_msgpack
 
 pd.read_msgpack = pandas_msgpack.read_msgpack

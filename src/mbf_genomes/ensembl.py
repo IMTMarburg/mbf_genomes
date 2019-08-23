@@ -20,7 +20,6 @@ from .base import (
 import pypipegraph as ppg
 from .common import EukaryoticCode
 import pandas_msgpack
-pd.to_msgpack = pandas_msgpack.to_msgpack
 
 
 def EnsemblGenome(species, revision, prebuild_manager=None):
@@ -308,7 +307,7 @@ class _EnsemblGenome(GenomeBase):
     def _msg_pack_job(self, property_name, filename, callback_function):
         def dump(output_filename):
             df = callback_function(self)
-            df.to_msgpack(output_filename / filename)
+            pandas_msgpack.to_msgpack(output_filename / filename, df)
 
         j = self.prebuild_manager.prebuild(
             f"ensembl/{self.species}_{self.revision}/{property_name}",
@@ -524,15 +523,15 @@ class _EnsemblGenome(GenomeBase):
                 # known issue - return basically any of the candidates on alternate regions, but be consistent.
                 # return sorted(ag_candidates)[0]
                 raise ValueError("No primary gene found for %s" % name)
-            else:
+            else:  # pragma: no cover
                 raise ValueError(
                     "Multiple gene on primary assemblies found for %s" % name
                 )
-        elif len(ag_ids) == 0 and len(name_candidates) == 1:
+        elif len(ag_ids) == 0 and len(name_candidates) == 1:  # pragma: no cover
             # another easy case, there are no alternatives
             return list(name_candidates)[0]
         else:
-            raise ValueError(
+            raise ValueError(  # pragma: no cover
                 "Could not determine canonical gene for '%s'. use name_to_gene_ids()"
                 " and have a look yourself (don't forget the allele groups).\n"
                 "Name candidates: %s\n"
