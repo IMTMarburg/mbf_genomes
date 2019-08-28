@@ -302,7 +302,7 @@ class TestFilebased:
                 "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"
             ),
         )
-        g.get_additional_gene_gtf_filenames = lambda: [
+        g.get_additional_gene_gtfs = lambda: [
             get_sample_data(
                 "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.additional.gtf.gz"
             )
@@ -339,7 +339,7 @@ class TestFilebased:
                 "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"
             ),
         )
-        g.get_additional_gene_gtf_filenames = lambda: [
+        g.get_additional_gene_gtfs = lambda: [
             get_sample_data(
                 "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"
             )
@@ -366,7 +366,7 @@ class TestFilebased:
                 "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"
             ),
         )
-        g.get_additional_gene_gtf_filenames = lambda: [
+        g.get_additional_gene_gtfs = lambda: [
             get_sample_data(
                 "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.more_transcripts.gtf.gz"
             )

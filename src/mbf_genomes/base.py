@@ -269,14 +269,14 @@ class GenomeBase(ABC):
         with pysam.FastaFile(str(self.find_file("pep.fasta"))) as f:
             return f.fetch(protein_id)
 
-    def get_additional_gene_gtf_filenames(self):
+    def get_additional_gene_gtfs(self):
         return []
 
     def get_gtf(self, features=[]):
         import mbf_gtf
 
         filenames = [self.find_file("genes.gtf")]
-        filenames.extend(self.get_additional_gene_gtf_filenames())
+        filenames.extend(self.get_additional_gene_gtfs())
         dfs = {}
         for gtf_filename in filenames:
             if gtf_filename is None:
@@ -560,6 +560,8 @@ class GenomeBase(ABC):
                 if estart < start or estop > stop:
                     raise ValueError(
                         f"Exon outside of transcript: {transcript_stable_id}"
+                        f"\ngene was {start}..{stop}"
+                        f"\nexon was {estart}..{estop}"
                     )
             gene_info = genes[gene_stable_id]
             if start < gene_info.start or stop > gene_info.stop:
@@ -625,7 +627,7 @@ class GenomeBase(ABC):
     @property
     def gtf_dependencies(self):
         res = self.gene_gtf_dependencies
-        additional = self.get_additional_gene_gtf_filenames()
+        additional = self.get_additional_gene_gtfs()
         if additional:
             res.append(
                 PrebuildFileInvariantsExploding(

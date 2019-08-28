@@ -172,7 +172,7 @@ class TestEnsembl:
 
         df = g.df_genes
         df2 = g.df_genes  # caching
-        assert len(df) == 6910
+        assert len(df) == 6910 + 4  # from the a2 locus
         assert df is df2
         assert df.loc["UMAG_12015"].strand == 1
         assert df.loc["UMAG_12015"].tss == 4370
@@ -194,7 +194,7 @@ class TestEnsembl:
 
         df = g.df_transcripts
         assert "gene_stable_id" in df.columns
-        assert len(df) == 6928
+        assert len(df) == 6928 + 4  # from the a2 locus
         assert df["chr"].dtype.name == "category"
         assert df["biotype"].dtype.name == "category"
         assert df.loc["KIS71021"].chr == "2"
@@ -242,7 +242,7 @@ class TestEnsembl:
         assert (df.exons.apply(lambda x: len(x)) > 1).any()
 
     def test_get_additional_gene_gtfs(self, mock_download, shared_prebuild):
-        g = EnsemblGenome("Ustilago_maydis", 33, shared_prebuild)
+        g = EnsemblGenome("Ashbya_gossypii", 33, shared_prebuild)
         assert len(g.get_additional_gene_gtfs()) == 0
 
         g = EnsemblGenome("Homo_sapiens", 74, shared_prebuild)
@@ -256,6 +256,17 @@ class TestEnsembl:
         assert g.get_additional_gene_gtfs()[0].exists()
         g = EnsemblGenome("Mus_musculus", 67, shared_prebuild)
         assert len(g.get_additional_gene_gtfs()) == 0
+
+    def test_get_additional_gene_gtfs_land_in_df_genes(
+        self, mock_download, shared_prebuild
+    ):
+        g = EnsemblGenome("Ustilago_maydis", 33, shared_prebuild)
+        assert len(g.get_additional_gene_gtfs()) == 1
+        ppg.run_pipegraph()
+
+        print(g.df_genes.chr.unique())
+        assert "A2_pra2" in g.df_genes.index
+        assert "A2_pra2.1" in g.df_transcripts.index
 
     def test_genes_iterator(self, mock_download, shared_prebuild):
         g = EnsemblGenome("Ashbya_gossypii", 41, shared_prebuild)
@@ -319,6 +330,7 @@ class TestEnsembl:
             "21",
             "22",
             "23",
+            "U37796.1",  # it is a true chromosome if there's chromosome: in the fasta description
         ]
         all_contigs = should + [
             "um_scaf_contig_1.256",
@@ -729,3 +741,15 @@ class TestEnsembl:
         new_pipegraph.new_pipegraph()
         g3 = EnsemblGenome("Ustilago_maydis", 33)
         assert g is not g3
+
+    def test_additional_fasta(self, mock_download, shared_prebuild):
+        g = EnsemblGenome("Ustilago_maydis", 33, shared_prebuild)
+        ppg.run_pipegraph()
+        seq = g.get_genome_sequence("U37796.1", 0, 100)
+        assert (
+            seq
+            == (
+                "taatcgtgaattgagctaggggcgccaagttacgtggcaaaagcgggctgactggcggcgaagatgtgt"
+                "tggtctgcacctgagttcacgaacctgagac"
+            ).upper()
+        )
