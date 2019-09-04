@@ -1,6 +1,7 @@
 import attr
 import numpy as np
 from mbf_nested_intervals import IntervalSet
+from .common import reverse_complement
 
 
 @attr.s(slots=True)
@@ -12,7 +13,8 @@ class Gene:
     stop = attr.ib()
     strand = attr.ib()
     biotype = attr.ib()
-    transcripts = attr.ib(default=None)
+    transcripts = attr.ib()
+    genome = attr.ib()
 
     @property
     def tss(self):
@@ -108,6 +110,7 @@ class Transcript:
     exons = attr.ib()
     exon_stable_ids = attr.ib()
     gene = attr.ib()
+    genome = attr.ib()
 
     @property
     def exons_tuples(self):
@@ -125,3 +128,25 @@ class Transcript:
         gene_stop = self.gene.stop
         exons = sorted(self.exons_tuples)
         return IntervalSet.from_tuples(exons).invert(gene_start, gene_stop).to_tuples()
+
+
+    @property
+    def cdna(self):
+        """Get the cdna sequence as defined by cdna.fasta"""
+        return self.genome.get_cdna_sequence(self.transcript_stable_id)
+
+    @property
+    def mrna(self):
+        """The mRNA sequence after splicing.
+        (forward strand - ie. ATG is ATG)
+
+        unlike cdna, this is build dynamically from the genome_sequence 
+        and exon definition and is available for non-protein coding transcripts
+        """
+        seq = "".join([
+            self.genome.get_genome_sequence(self.chr, start, stop) for (start, stop) in self.exons]
+                      )
+        if self.strand == -1:
+            seq = reverse_complement(seq)
+        return seq
+
