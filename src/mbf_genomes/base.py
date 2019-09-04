@@ -323,6 +323,7 @@ class GenomeBase(ABC):
                 tup.strand,
                 tup.biotype,
                 transcripts=[],
+                genome=weakref.proxy(self),
             )
             genes[tup[0]] = g
         transcripts = {}
@@ -340,6 +341,7 @@ class GenomeBase(ABC):
                 tup.exons,
                 tup.exon_stable_ids,
                 weakref.proxy(g),
+                genome=weakref.proxy(self),
             )
             transcripts[tup[0]] = t
             g.transcripts.append(t)
