@@ -558,13 +558,16 @@ class GenomeBase(ABC):
 
             if start > stop:
                 raise ValueError("start > stop {row}")
-            for estart, estop in exons:
-                if estart < start or estop > stop:
-                    raise ValueError(
-                        f"Exon outside of transcript: {transcript_stable_id}"
-                        f"\ngene was {start}..{stop}"
-                        f"\nexon was {estart}..{estop}"
-                    )
+            try:
+                for estart, estop in exons:
+                    if estart < start or estop > stop:
+                        raise ValueError(
+                            f"Exon outside of transcript: {transcript_stable_id}"
+                            f"\ngene was {start}..{stop}"
+                            f"\nexon was {estart}..{estop}"
+                        )
+            except TypeError:
+                print(repr((transcript_stable_id, start, stop, exons, gene_stable_id)))
             gene_info = genes[gene_stable_id]
             if start < gene_info.start or stop > gene_info.stop:
                 raise ValueError(
