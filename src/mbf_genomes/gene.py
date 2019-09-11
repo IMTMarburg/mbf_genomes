@@ -34,7 +34,10 @@ class Gene:
         gene_stop = self.stop
         exons = []
         for tr in self.transcripts:
-            exons.extend(tr.exons)
+            try:
+                exons.extend(tr.exons)
+            except TypeError:  # pragma: no cover
+                raise ValueError(f"No exons defined for {tr.transcript_stable_id}")
         return IntervalSet.from_tuples(exons).invert(gene_start, gene_stop).to_numpy()
 
     @property
@@ -46,11 +49,14 @@ class Gene:
         gene_stop = self.stop
         introns = [], []
         for tr in self.transcripts:
-            starts, stops = (
-                IntervalSet.from_tuples(tr.exons)
-                .invert(gene_start, gene_stop)
-                .to_numpy()
-            )
+            try:
+                starts, stops = (
+                    IntervalSet.from_tuples(tr.exons)
+                    .invert(gene_start, gene_stop)
+                    .to_numpy()
+                )
+            except TypeError:  # pragma: no cover
+                raise ValueError(f"No exons defined for {tr.transcript_stable_id}")
             introns[0].extend(starts)
             introns[1].extend(stops)
         return introns
@@ -60,7 +66,10 @@ class Gene:
         """Common code to exons_merged and exons_overlapping"""
         exons = []
         for tr in self.transcripts:
-            exons.extend(tr.exons)
+            try:
+                exons.extend(tr.exons)
+            except TypeError:  # pragma: no cover
+                raise ValueError(f"No exons defined for {tr.transcript_stable_id}")
         return exons
 
     @property
