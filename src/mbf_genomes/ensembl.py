@@ -375,7 +375,7 @@ class _EnsemblGenome(GenomeBase):
             f"ensembl/{self.species}_{self.revision}/{property_name}",
             # we don't use the version for this, since we need it for building
             # various aligner versioned indices
-            "2",
+            "3",
             [],
             [filename],
             dump,

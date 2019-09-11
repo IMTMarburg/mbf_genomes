@@ -100,7 +100,7 @@ for input_filename in Path(__file__).parent.glob("ribosomal_genes_*.gtf.gz"):
         exon = {
             "chr": row["chr"],
             "source": "ucsc_rmsk",
-            "kind": "trarnscript",
+            "kind": "exon",
             "start": row["start"],
             "stop": row["start"],
             "score": row["score"],
