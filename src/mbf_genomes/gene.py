@@ -158,7 +158,7 @@ class Transcript:
         """The mRNA sequence after splicing.
         (forward strand - ie. ATG is ATG)
 
-        unlike cdna, this is build dynamically from the genome_sequence 
+        unlike cdna, this is build dynamically from the genome_sequence
         and exon definition and is available for non-protein coding transcripts
         """
         seq = "".join(

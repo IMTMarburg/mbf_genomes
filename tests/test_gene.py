@@ -154,15 +154,19 @@ def test_gene_get_introns_merging():
             }
         ),
     )
-    print(genome.genes["fake1"].introns)
+    print(genome.genes["fake1"].introns_strict)
 
     def as_list(introns):
         return [list(introns[0]), list(introns[1])]
 
-    assert as_list(genome.genes["fake1"].introns) == [[4800], [4900]]
+    assert as_list(genome.genes["fake1"].introns_strict) == [[4800], [4900]]
     # assert genome.transcripts["trans1b"].introns == [(3500, 3750), (4000, 4900)]
-    assert as_list(genome.genes["fake2"].introns) == [[5000], [5100]]
-    assert as_list(genome.genes["fake3"].introns) == [[5000, 5200], [5100, 5222]]
+    assert as_list(genome.genes["fake2"].introns_strict) == [[5000], [5100]]
+    assert as_list(genome.genes["fake3"].introns_strict) == [[5000, 5200], [5100, 5222]]
+    assert as_list(genome.genes["fake1"].introns_all) == [
+        [3000, 4800, 3500, 4000],
+        [3100, 4900, 3750, 4900],
+    ]
 
 
 def test_intronify_more_complex():
@@ -312,10 +316,10 @@ def test_get_gene_introns():
             }
         ),
     )
-    one = genome.genes["fake1"].introns
+    one = genome.genes["fake1"].introns_strict
     assert len(one[0]) == 0
 
-    two = genome.genes["fake2"].introns
+    two = genome.genes["fake2"].introns_strict
 
     def as_list(introns):
         return [list(introns[0]), list(introns[1])]
