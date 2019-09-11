@@ -25,9 +25,10 @@ class Gene:
         return self.start if self.strand != 1 else self.stop
 
     @property
-    def introns(self):
+    def introns_strict(self):
         """Get truly intronic regions - ie. not covered by any exon for this gene
         result is a a tuple of np arrays, (starts, stops)
+        By it's definition, the introns are disjunct
         """
         gene_start = self.start
         gene_stop = self.stop
@@ -35,6 +36,24 @@ class Gene:
         for tr in self.transcripts:
             exons.extend(tr.exons)
         return IntervalSet.from_tuples(exons).invert(gene_start, gene_stop).to_numpy()
+
+    @property
+    def introns_all(self):
+        """Get intronic regions - ie. an intron in any of the transcripts.
+        May contain repetitions and overlaps and is not sorted!
+        """
+        gene_start = self.start
+        gene_stop = self.stop
+        introns = [], []
+        for tr in self.transcripts:
+            starts, stops = (
+                IntervalSet.from_tuples(tr.exons)
+                .invert(gene_start, gene_stop)
+                .to_numpy()
+            )
+            introns[0].extend(starts)
+            introns[1].extend(stops)
+        return introns
 
     @property
     def _exons(self):
