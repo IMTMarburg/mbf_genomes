@@ -788,3 +788,21 @@ def test_name_to_gene_id():
     assert genome.name_to_gene_ids("bla2") == set(["fake2"])
     assert genome.name_to_gene_ids("bla3") == set(["fake3"])
     assert genome.name_to_gene_ids("bla4") == set(["fake4"])
+
+
+def test_get_reads_in_exon():
+    import mbf_sampledata
+    import pysam
+
+    genome = mbf_sampledata.get_human_22_fake_genome()
+    bam = pysam.Samfile(
+        mbf_sampledata.get_sample_path("mbf_align/rnaseq_spliced_chr22.bam")
+    )
+    g = genome.genes["ENSG00000128228"]
+    reads = g.get_reads_in_exons(bam)
+    assert reads
+    start = 21642302 - 1
+    stop = 21644299
+    for r in reads:
+        ov = r.get_overlap(start, stop)
+        assert ov > 0

@@ -124,6 +124,19 @@ class Gene:
         """
         return self._reformat_exons(self._exons_protein_coding)
 
+    def get_reads_in_exons(self, bam):
+        """Return a list of all the reads in the bam that
+        have an overlap with the exon regions
+        
+        Note that the same read being aligned multiple
+        times does count only once!
+        """
+        result = {}
+        for start, stop in zip(*self.exons_merged):
+            for r in bam.fetch(self.chr, start, stop):
+                if r.get_overlap(start, stop) > 0:
+                    result[r.query_name] = r
+        return list(result.values())
 
 @attr.s(slots=True)
 class Transcript:
