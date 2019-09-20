@@ -124,19 +124,40 @@ class Gene:
         """
         return self._reformat_exons(self._exons_protein_coding)
 
-    def get_reads_in_exons(self, bam):
+    def get_reads_in_exons(self, bam, dedup="gene"):
         """Return a list of all the reads in the bam that
         have an overlap with the exon regions
-        
-        Note that the same read being aligned multiple
-        times does count only once!
+
+        dedup may be:
+            'gene' - a given read may only count once in this gene (default)
+            False - no dedup (but each alignment only once even if it spans multiple exons)
+            'primary_only': - only return reads with tag HI==1
         """
         result = {}
-        for start, stop in zip(*self.exons_merged):
-            for r in bam.fetch(self.chr, start, stop):
-                if r.get_overlap(start, stop) > 0:
-                    result[r.query_name] = r
+        if dedup == "gene":
+            for start, stop in zip(*self.exons_merged):
+                for r in bam.fetch(self.chr, start, stop):
+                    if r.get_overlap(start, stop) > 0:
+                        result[r.query_name] = r
+        elif dedup == False:
+            for start, stop in zip(*self.exons_merged):
+                for r in bam.fetch(self.chr, start, stop):
+                    if r.get_overlap(start, stop) > 0:
+                        # which amounts to no-dedud except if the aligner is
+                        # *really* buggy
+                        result[len(result)] = r
+        elif dedup == "primary_only":
+            for start, stop in zip(*self.exons_merged):
+                for r in bam.fetch(self.chr, start, stop):
+                    if r.get_overlap(start, stop) > 0 and r.get_tag("HI") == 1:
+                        # which amounts to no-dedud except if the aligner is
+                        # *really* buggy
+                        result[r.query_name, r.pos, r.cigarstring] = r
+        else:
+            raise ValueError("Invalid dedup value")
+
         return list(result.values())
+
 
 @attr.s(slots=True)
 class Transcript:
@@ -192,3 +213,26 @@ class Transcript:
         if self.strand == -1:
             seq = reverse_complement(seq)
         return seq
+
+    @property
+    def coordinate_translations(self):
+        """Return a [genomic_coordinates]
+        the transcript coordinate relative to the  5' start 
+        is the index
+        """
+        result = []
+        tr_pos = 0
+        if self.strand == 1:
+            for exon_start, exon_stop in self.exons:
+                for ii in range(exon_start, exon_stop):
+                    #result.append((tr_pos, ii))
+                    result.append(ii)
+                    tr_pos += 1
+        else:
+            for exon_start, exon_stop in reversed(self.exons):
+                for ii in range(exon_stop, exon_start, -1):
+                    #result.append((tr_pos, ii - 1))
+                    result.append(ii - 1)
+                    tr_pos += 1
+        return result
+

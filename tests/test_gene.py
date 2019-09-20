@@ -806,3 +806,57 @@ def test_get_reads_in_exon():
     for r in reads:
         ov = r.get_overlap(start, stop)
         assert ov > 0
+
+
+def test_transcript_coordinate_translation_fwd():
+    import mbf_sampledata
+
+    genome = mbf_sampledata.get_human_22_fake_genome()
+    tr = genome.transcripts["ENST00000455558"]
+    map = tr.coordinate_translations
+    assert len(map) == 657
+    # first exon
+    for ii in range(0, 47):
+        assert (25565107 - 1 + ii) in map
+
+    reference = [
+        (25565107, 25565153, 47),
+        (25604377, 25604453, 77),
+        (25661576, 25661677, 102),
+        (25663630, 25663704, 75),
+        (25667739, 25667800, 62),
+        (25672296, 25672347, 52),
+        (25674437, 25674528, 92),
+        (25678816, 25678915, 100),
+        (25684519, 25684568, 50),
+    ]
+    offset = 0
+    should = []
+    for genome_start, genome_stop, length in reference:
+        for ii in range(offset, offset + length):
+            should.append(genome_start - 1 + ii - offset)
+        offset += length
+    ok = map == should
+    assert ok  # pytest spends an eternity formating the diff otherwise on failure..
+
+    assert map[-1] == (25684568 - 1)
+
+
+def test_transcript_coordinate_translation_reverse():
+    import mbf_sampledata
+
+    genome = mbf_sampledata.get_human_22_fake_genome()
+    tr = genome.transcripts["ENST00000420242"]
+    map = tr.coordinate_translations
+    assert len(map) == 525
+
+    print(tr.exons)
+    assert map[0] == (26512496 - 1)
+    assert map[102] == (26512394 - 1)
+    assert map[103] == (26512175 - 1)
+    for ii in range(77):
+        assert map[103 + ii] == (26512175 - 1 - ii)
+    assert map[103 + 77] == (26510692 - 1)
+    assert map[103 + 77 + 76 - 1] == (26510617 - 1)
+    assert map[-1] == (26506878 - 1)
+    assert len(set(map)) == len(map)
