@@ -729,9 +729,23 @@ class TestEnsembl:
         g._pb_download_gtf().callback()
         g._pb_download_sql_table_definitions().callback()
         g.job_genes().callback()
-        # g.job_transcripts().callback()
+        g.job_transcripts().callback()
         assert g.name_to_canonical_id("DSEL") == "ENSG00000171451"
         assert g.name_to_canonical_id("THEMIS") == "ENSG00000172673"
+         # test the breakage
+        with pytest.raises(ValueError):
+            g.name_to_canonical_id("SOD2")
+        with pytest.raises(ValueError):
+            g.name_to_canonical_id("IGF2")
+        with pytest.raises(ValueError):
+            g.name_to_canonical_id("ABCF2")
+        with pytest.raises(ValueError):
+            g.name_to_canonical_id("TBCE")
+
+        assert g.name_to_canonical_id("SOD2", True) == "ENSG00000112096"
+        assert g.name_to_canonical_id("IGF2", True) == "ENSG00000167244"
+        assert g.name_to_canonical_id("ABCF2", True) == "ENSG00000033050"
+        assert g.name_to_canonical_id("TBCE", True) == "ENSG00000284770"
         # assert g.name_to_canonical_id('HLA-DRB3') == 'ENSG00000230463'
 
     def test_same_same(self, new_pipegraph):

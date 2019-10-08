@@ -559,7 +559,7 @@ class _EnsemblGenome(GenomeBase):
         df = df.join(gene_df.set_index("gene_id"), "gene_id")
         return df
 
-    def name_to_canonical_id(self, name):
+    def name_to_canonical_id(self, name, break_ties_by_number_of_transcripts=False):
         """Given a gene name, lookup up it's stable ids, and return the
         one that's on the primary assembly from the allele group"""
         name_candidates = set(
@@ -593,8 +593,15 @@ class _EnsemblGenome(GenomeBase):
             # another easy case, there are no alternatives
             return list(name_candidates)[0]
         else:
-            raise ValueError(  # pragma: no cover
-                "Could not determine canonical gene for '%s'. use name_to_gene_ids()"
+            if break_ties_by_number_of_transcripts:
+                name_candidates = list(name_candidates)
+                name_candidates.sort(key = lambda gene_stable_id: len(self.genes[gene_stable_id].transcripts))
+                return name_candidates[-1]
+            else:
+                raise ValueError(  # pragma: no cover
+                "Could not determine canonical gene for '%s'. "
+                "Either pass break_ties_by_number_of_transcripts=True, "
+                "or use name_to_gene_ids()"
                 " and have a look yourself (don't forget the allele groups).\n"
                 "Name candidates: %s\n"
                 "AG candidates: %s\n"
