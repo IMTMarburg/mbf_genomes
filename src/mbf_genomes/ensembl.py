@@ -195,7 +195,11 @@ class _EnsemblGenome(GenomeBase):
                         url, unzipped_filename, additional_fastas
                     ),
                 ).depends_on(
-                    [PrebuildFileInvariantsExploding(self.name + '_fasta_deps', additional_fastas)]
+                    [
+                        PrebuildFileInvariantsExploding(
+                            self.name + "_fasta_deps", additional_fastas
+                        )
+                    ]
                 ),
             )
 
@@ -277,6 +281,7 @@ class _EnsemblGenome(GenomeBase):
     def _pb_download_sql_tables(self):
         tables = [
             ("gene"),  # for description
+            ("transcript"),  # for external name lookup transcript -> gene
             ("stable_id_event"),  # for stable_id changes
             ("external_db"),  # for external name lookup
             ("object_xref"),  # for external name lookup
@@ -534,17 +539,30 @@ class _EnsemblGenome(GenomeBase):
         object_xref = self._load_from_sql(
             "object_xref", ["ensembl_object_type", "xref_id", "ensembl_id"]
         )
-        object_xref = object_xref[object_xref["ensembl_object_type"] == "Gene"]
         object_xref = object_xref[object_xref.xref_id.isin(set(xref.index))]
+        # object_xref = object_xref[object_xref["ensembl_object_type"] == "Gene"]
         result = {}
+        transcripts = None
         genes = self._load_from_sql("gene", ["gene_id", "stable_id"]).set_index(
             "gene_id"
         )
-        for internal_id, xref_id in zip(
-            object_xref["ensembl_id"].values, object_xref["xref_id"].values
-        ):
-            gene_stable_id = genes.at[internal_id, "stable_id"]
-            db_primary = xref.at[xref_id, "dbprimary_acc"]
+        for row in object_xref.itertuples(index=False):
+            if row.ensembl_object_type == "Gene":
+                gene_id = row.ensembl_id
+            elif row.ensembl_object_type == "Transcript":
+                if transcripts is None:
+                    transcripts = self._load_from_sql(
+                        "transcript", ["transcript_id", "gene_id"]
+                    ).set_index("transcript_id")
+
+                gene_id = transcripts.at[row.ensembl_id, "gene_id"]
+            else:
+                print(row)
+                raise ValueError()
+
+            gene_stable_id = genes.at[gene_id, "stable_id"]
+
+            db_primary = xref.at[row.xref_id, "dbprimary_acc"]
             if not db_primary in result:
                 result[db_primary] = set()
             result[db_primary].add(gene_stable_id)
@@ -595,15 +613,19 @@ class _EnsemblGenome(GenomeBase):
         else:
             if break_ties_by_number_of_transcripts:
                 name_candidates = list(name_candidates)
-                name_candidates.sort(key = lambda gene_stable_id: len(self.genes[gene_stable_id].transcripts))
+                name_candidates.sort(
+                    key=lambda gene_stable_id: len(
+                        self.genes[gene_stable_id].transcripts
+                    )
+                )
                 return name_candidates[-1]
             else:
                 raise ValueError(  # pragma: no cover
-                "Could not determine canonical gene for '%s'. "
-                "Either pass break_ties_by_number_of_transcripts=True, "
-                "or use name_to_gene_ids()"
-                " and have a look yourself (don't forget the allele groups).\n"
-                "Name candidates: %s\n"
-                "AG candidates: %s\n"
-                "AG ids: %s" % (name, name_candidates, ag_candidates, ag_ids)
-            )
+                    "Could not determine canonical gene for '%s'. "
+                    "Either pass break_ties_by_number_of_transcripts=True, "
+                    "or use name_to_gene_ids()"
+                    " and have a look yourself (don't forget the allele groups).\n"
+                    "Name candidates: %s\n"
+                    "AG candidates: %s\n"
+                    "AG ids: %s" % (name, name_candidates, ag_candidates, ag_ids)
+                )

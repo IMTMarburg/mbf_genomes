@@ -717,6 +717,15 @@ class TestEnsembl:
         with pytest.raises(KeyError):
             g.get_external_db_to_gene_id_mapping("GOAnosuchthing")
 
+    def test_external_db_mapping_transcript(
+        self, new_pipegraph, mock_download, shared_prebuild
+    ):
+        # the smallest eukaryotic species at the time of writing this at 2.8 mb
+        g = EnsemblGenome("Ustilago_maydis", 33, shared_prebuild)
+        ppg.run_pipegraph()
+        ena = g.get_external_db_to_gene_id_mapping("ENA_FEATURE_TRANSCRIPT")
+        assert ena["CM003155.1:CDS:9690..12623"] == set(["UMAG_05624"])
+
     @patch("pypipegraph.util.checksum_file", return_value="5")
     def test_get_canonical_ids(self, new_pipegraph, mock_download, shared_prebuild):
         g = EnsemblGenome("Homo_sapiens", 96, shared_prebuild)
@@ -732,7 +741,7 @@ class TestEnsembl:
         g.job_transcripts().callback()
         assert g.name_to_canonical_id("DSEL") == "ENSG00000171451"
         assert g.name_to_canonical_id("THEMIS") == "ENSG00000172673"
-         # test the breakage
+        # test the breakage
         with pytest.raises(ValueError):
             g.name_to_canonical_id("SOD2")
         with pytest.raises(ValueError):

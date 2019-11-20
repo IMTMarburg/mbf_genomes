@@ -139,7 +139,7 @@ class Gene:
                 for r in bam.fetch(self.chr, start, stop):
                     if r.get_overlap(start, stop) > 0:
                         result[r.query_name] = r
-        elif dedup == False:
+        elif dedup is False:
             for start, stop in zip(*self.exons_merged):
                 for r in bam.fetch(self.chr, start, stop):
                     if r.get_overlap(start, stop) > 0:
@@ -217,7 +217,7 @@ class Transcript:
     @property
     def coordinate_translations(self):
         """Return a [genomic_coordinates]
-        the transcript coordinate relative to the  5' start 
+        the transcript coordinate relative to the  5' start
         is the index
         """
         result = []
@@ -225,14 +225,13 @@ class Transcript:
         if self.strand == 1:
             for exon_start, exon_stop in self.exons:
                 for ii in range(exon_start, exon_stop):
-                    #result.append((tr_pos, ii))
+                    # result.append((tr_pos, ii))
                     result.append(ii)
                     tr_pos += 1
         else:
             for exon_start, exon_stop in reversed(self.exons):
                 for ii in range(exon_stop, exon_start, -1):
-                    #result.append((tr_pos, ii - 1))
+                    # result.append((tr_pos, ii - 1))
                     result.append(ii - 1)
                     tr_pos += 1
         return result
-
