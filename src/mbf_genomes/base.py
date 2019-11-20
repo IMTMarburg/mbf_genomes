@@ -633,7 +633,8 @@ class GenomeBase(ABC):
     def gtf_dependencies(self):
         res = self.gene_gtf_dependencies
         additional = self.get_additional_gene_gtfs()
-        if additional:
+        import pypipegraph as ppg
+        if additional and ppg.inside_ppg():
             res.append(
                 PrebuildFileInvariantsExploding(
                     self.name + "_additional_gtfs", additional
