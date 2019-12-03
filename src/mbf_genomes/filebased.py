@@ -1,8 +1,11 @@
 import pypipegraph as ppg
 from pathlib import Path
-from .base import GenomeBase, include_in_downloads, class_with_downloads
+from .base import GenomeBase, class_with_downloads
 from .common import reverse_complement, iter_fasta, wrappedIterator, EukaryoticCode
-from mbf_externals.prebuild import PrebuildFileInvariantsExploding
+from mbf_externals.prebuild import (
+    _PrebuildFileInvariantsExploding as PrebuildFileInvariantsExploding,
+)
+
 import pandas_msgpack
 
 
@@ -126,9 +129,7 @@ class FileBasedGenome(GenomeBase):
                 for tr in self.transcripts.values():
                     seq = ""
                     for start, stop in tr.exons:
-                        seq += self.get_genome_sequence(
-                            tr.chr, start, stop
-                        )
+                        seq += self.get_genome_sequence(tr.chr, start, stop)
                     if tr.strand == -1:
                         seq = reverse_complement(seq)
                     seq = "".join(wrappedIterator(80)(seq))
@@ -160,11 +161,9 @@ class FileBasedGenome(GenomeBase):
         self._download_jobs.append(job)
         return job
 
-    @include_in_downloads
-    def prepare_gtf(self):
-        return self.gtf_dependencies
-
-    def _msg_pack_job(self, property_name, filename, callback_function):
+    def _msg_pack_job(
+        self, property_name, filename, callback_function, files_to_invariant_on
+    ):
         out_dir = self.cache_dir / "lookup"
         out_dir.mkdir(exist_ok=True)
 
@@ -176,6 +175,8 @@ class FileBasedGenome(GenomeBase):
             ppg.FunctionInvariant(out_dir / filename / property_name, callback_function)
         )
         self._prebuilds.append(j)
+        for f in files_to_invariant_on:
+            j.depends_on_file(f)
         return j
 
 
@@ -219,7 +220,9 @@ class InteractiveFileBasedGenome(GenomeBase):
         else:
             self.gene_gtf_dependencies = []
 
-    def _msg_pack_job(self, property_name, filename, callback_function):
+    def _msg_pack_job(
+        self, property_name, filename, callback_function, files_to_invariant_on
+    ):
         out_dir = self.cache_dir / "lookup"
         out_dir.mkdir(exist_ok=True)
 
@@ -238,7 +241,8 @@ class InteractiveFileBasedGenome(GenomeBase):
                     out_dir / filename / property_name, callback_function
                 )
             )
+            for f in files_to_invariant_on:
+                j.depends_on_file(f)
             self._prebuilds.append(j)
             return j
-
         return

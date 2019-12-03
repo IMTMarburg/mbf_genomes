@@ -5,7 +5,6 @@ from dppd import dppd
 import pysam
 from .common import reverse_complement, df_to_rows
 from .gene import Gene, Transcript
-from mbf_externals.prebuild import PrebuildFileInvariantsExploding
 from mbf_externals.util import lazy_method
 import weakref
 import pandas_msgpack
@@ -65,8 +64,9 @@ class MsgPackProperty:
 
         """
 
-    def __init__(self, dependency_callback=None):
+    def __init__(self, dependency_callback=None, files_to_invariant_on_callback=None):
         self.dependency_callback = dependency_callback
+        self.files_to_invariant_on_callback = files_to_invariant_on_callback
 
 
 def msgpack_unpacking_class(cls):
@@ -105,8 +105,15 @@ def msgpack_unpacking_class(cls):
                     filename=filename,
                     calc_func=calc_func,
                     dependency_callback=v.dependency_callback,
+                    files_to_invariant_on_callback=v.files_to_invariant_on_callback,
                 ):
-                    j = self._msg_pack_job(d, filename, calc_func)
+                    if files_to_invariant_on_callback:
+                        files_to_invariant_on = files_to_invariant_on_callback(self)
+                    else:
+                        files_to_invariant_on = []
+                    j = self._msg_pack_job(
+                        d, filename, calc_func, files_to_invariant_on
+                    )
                     if j is not None:
                         j.depends_on(dependency_callback(self))
                     return j
@@ -128,7 +135,9 @@ class GenomeBase(ABC):
         self._download_jobs = []
 
     @abstractmethod
-    def _msg_pack_job(self, property_name, filename, callback_function):
+    def _msg_pack_job(
+        self, property_name, filename, callback_function, files_to_invariant_on
+    ):
         raise NotImplementedError  # pragma: no cover
 
     @lazy_method
@@ -205,17 +214,37 @@ class GenomeBase(ABC):
             gtf_to_use = "genes.gtf"
         name = Path(fasta_to_use).stem
 
-        def do_align(output_path):
-            aligner.build_index(
-                [self.find_file(fasta_to_use)],
-                self.find_file(gtf_to_use) if gtf_to_use is not None else None,
-                output_path,
-            )
+        deps = []
+        if hasattr(aligner, "build_index"):
+            deps.append(self.find_prebuild(fasta_to_use))
+            deps.append(self.find_prebuild(gtf_to_use))
+            postfix = ""
+            func_deps = {}
+
+            def do_align(output_path):
+                aligner.build_index(
+                    [self.find_file(fasta_to_use)],
+                    self.find_file(gtf_to_use) if gtf_to_use is not None else None,
+                    output_path,
+                )
+
+        elif hasattr(aligner, "build_index_from_genome"):
+            deps.extend(aligner.get_genome_deps(self))
+            func_deps = {
+                "build_index_from_genome": aligner.__class__.build_index_from_genome
+            }
+            postfix = "/" + aligner.get_build_key()
+
+            def do_align(output_path):
+                aligner.build_index_from_genome(self, output_path)
+
+        else:
+            raise ValueError("Could not find build_index* function")
 
         min_ver, max_ver = aligner.get_index_version_range()
 
         job = self.prebuild_manager.prebuild(
-            f"ensembl/{self.species}_{self.revision}/indices/{name}/{aligner.name}",
+            f"ensembl/{self.species}_{self.revision}/indices/{name}/{aligner.name}{postfix}",
             aligner.version,
             [],
             ["sentinel.txt", "stdout.txt", "stderr.txt", "cmd.txt"],
@@ -224,8 +253,9 @@ class GenomeBase(ABC):
             maximum_acceptable_version=max_ver,
         )
         self.download_genome()  # so that the jobs are there
-        job.depends_on(self.find_prebuild(fasta_to_use))
-        job.depends_on(self.find_prebuild(gtf_to_use))
+        job.depends_on(deps)
+        for name, f in func_deps.items():
+            job.depends_on_func(name, f)
         return job
 
     @lazy_method
@@ -623,24 +653,18 @@ class GenomeBase(ABC):
         result = pd.DataFrame(result).set_index("protein_stable_id")
         return result
 
-    df_genes = MsgPackProperty(lambda self: self.gtf_dependencies)
-    df_transcripts = MsgPackProperty(
-        lambda self: [self.gtf_dependencies, self.job_genes()]
+    df_genes = MsgPackProperty(
+        lambda self: self.gene_gtf_dependencies,
+        lambda self: self.get_additional_gene_gtfs(),
     )
-    df_proteins = MsgPackProperty(lambda self: self.gtf_dependencies)
-
-    @property
-    def gtf_dependencies(self):
-        res = self.gene_gtf_dependencies
-        additional = self.get_additional_gene_gtfs()
-        import pypipegraph as ppg
-        if additional and ppg.inside_ppg():
-            res.append(
-                PrebuildFileInvariantsExploding(
-                    self.name + "_additional_gtfs", additional
-                )
-            )
-        return res
+    df_transcripts = MsgPackProperty(
+        lambda self: [self.gene_gtf_dependencies, self.job_genes()],
+        lambda self: self.get_additional_gene_gtfs(),
+    )
+    df_proteins = MsgPackProperty(
+        lambda self: self.gene_gtf_dependencies,
+        lambda self: self.get_additional_gene_gtfs(),
+    )
 
 
 @class_with_downloads
@@ -656,5 +680,7 @@ class HardCodedGenome(GenomeBase):
     def get_chromosome_lengths(self):
         return self._chr_lengths.copy()
 
-    def _msg_pack_job(self, property_name, filename, callback_function):
+    def _msg_pack_job(
+        self, property_name, filename, callback_function, files_to_invariant_on
+    ):
         pass

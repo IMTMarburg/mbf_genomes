@@ -2,7 +2,6 @@ import re
 from pathlib import Path
 import pandas as pd
 import mbf_externals
-from mbf_externals.prebuild import PrebuildFileInvariantsExploding
 from mbf_externals.util import (
     download_file_and_gunzip,
     # download_file_and_gzip,
@@ -182,25 +181,18 @@ class _EnsemblGenome(GenomeBase):
 
         additional_fastas = self.get_additional_fastas()
         if additional_fastas:
-            return (
-                self._pb_download(
-                    pb_name="dna",
-                    url="fasta/" + self.species.lower() + "/dna/",
-                    regexps=(
-                        fr"{self.species}\..+\.dna.primary_assembly.fa.gz",
-                        fr"{self.species}\..+\.dna.toplevel.fa.gz",
-                    ),
-                    output_filename="genome.fasta",
-                    download_func=lambda url, unzipped_filename: download_gunzip_and_attach(
-                        url, unzipped_filename, additional_fastas
-                    ),
-                ).depends_on(
-                    [
-                        PrebuildFileInvariantsExploding(
-                            self.name + "_fasta_deps", additional_fastas
-                        )
-                    ]
+            return self._pb_download(
+                pb_name="dna",
+                url="fasta/" + self.species.lower() + "/dna/",
+                regexps=(
+                    fr"{self.species}\..+\.dna.primary_assembly.fa.gz",
+                    fr"{self.species}\..+\.dna.toplevel.fa.gz",
                 ),
+                output_filename="genome.fasta",
+                download_func=lambda url, unzipped_filename: download_gunzip_and_attach(
+                    url, unzipped_filename, additional_fastas
+                ),
+                additional_input_files=additional_fastas,
             )
 
         else:
@@ -301,6 +293,7 @@ class _EnsemblGenome(GenomeBase):
         output_filename,
         download_func,
         match_transformer=lambda x: x,
+        additional_input_files=[],
     ):
         """regexps may be multiple - then the first one matching is used"""
 
@@ -334,7 +327,7 @@ class _EnsemblGenome(GenomeBase):
         job = self.prebuild_manager.prebuild(
             f"ensembl/{self.species}_{self.revision}/{pb_name}",
             "1",
-            [],
+            [] + additional_input_files,
             [output_filename],
             do_download,
         )
@@ -371,7 +364,9 @@ class _EnsemblGenome(GenomeBase):
     def base_url(self):
         return self.server_job.find_file("url.txt").read_text()
 
-    def _msg_pack_job(self, property_name, filename, callback_function):
+    def _msg_pack_job(
+        self, property_name, filename, callback_function, files_to_invariant_on
+    ):
         def dump(output_filename):
             df = callback_function(self)
             pandas_msgpack.to_msgpack(output_filename / filename, df)
@@ -380,8 +375,8 @@ class _EnsemblGenome(GenomeBase):
             f"ensembl/{self.species}_{self.revision}/{property_name}",
             # we don't use the version for this, since we need it for building
             # various aligner versioned indices
-            "3",
-            [],
+            "4",
+            files_to_invariant_on,
             [filename],
             dump,
         )
