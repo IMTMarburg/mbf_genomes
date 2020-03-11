@@ -681,6 +681,7 @@ class GenomeBase(ABC):
     )
 
     def get_genes_overlapping(self, chr, start, stop):
+        raise ValueError("Use mbf_genomics.Genes.get_overlapping instead. This has no test cases.")
         check_overlap = lambda df, interval: np.max(
             [
                 np.zeros(len(df)),
@@ -691,6 +692,7 @@ class GenomeBase(ABC):
         )
         filter = (self.df_genes["chr"] == chr) & (check_overlap(self.df_genes, [start, stop]) > 0)
         return self.df_genes[filter]
+
 
 @class_with_downloads
 class HardCodedGenome(GenomeBase):
