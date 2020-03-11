@@ -274,6 +274,7 @@ class _EnsemblGenome(GenomeBase):
         tables = [
             ("gene"),  # for description
             ("transcript"),  # for external name lookup transcript -> gene
+            ("translation"),  # for external name lookup translation -> gene
             ("stable_id_event"),  # for stable_id changes
             ("external_db"),  # for external name lookup
             ("object_xref"),  # for external name lookup
@@ -399,6 +400,10 @@ class _EnsemblGenome(GenomeBase):
         self, table_name, columns=None, check_for_columns=None, **kwargs
     ):
         table_columns = self._get_sql_table_column_names(table_name)
+        for c in columns:
+            if not c in table_columns:
+                raise ValueError(c, "available", table_columns)
+
         df = pd.read_csv(
             self.find_file(f"{table_name}.txt.gz"),
             sep="\t",
@@ -413,7 +418,7 @@ class _EnsemblGenome(GenomeBase):
         if check_for_columns:
             for c in check_for_columns:
                 if not c in table_columns:  # pragma: no cover
-                    raise KeyError(c)
+                    raise KeyError(c, "availabel", table_columns)
         return df
 
     def _prepare_df_genes_meta(self):
@@ -538,6 +543,7 @@ class _EnsemblGenome(GenomeBase):
         # object_xref = object_xref[object_xref["ensembl_object_type"] == "Gene"]
         result = {}
         transcripts = None
+        translations = None
         genes = self._load_from_sql("gene", ["gene_id", "stable_id"]).set_index(
             "gene_id"
         )
@@ -551,9 +557,21 @@ class _EnsemblGenome(GenomeBase):
                     ).set_index("transcript_id")
 
                 gene_id = transcripts.at[row.ensembl_id, "gene_id"]
+            elif row.ensembl_object_type == "Translation":
+                if translations is None:
+                    translations = self._load_from_sql(
+                        "translation", ["translation_id", "transcript_id"]
+                    ).set_index("translation_id")
+                if transcripts is None:
+                    transcripts = self._load_from_sql(
+                        "transcript", ["transcript_id", "gene_id"]
+                    ).set_index("transcript_id")
+
+                transcript_id = translations.at[row.ensembl_id, "transcript_id"]
+                gene_id = transcripts.at[transcript_id, "gene_id"]
             else:
                 print(row)
-                raise ValueError()
+                raise ValueError("Mapped to neiter a transcript, nor a gene")
 
             gene_stable_id = genes.at[gene_id, "stable_id"]
 
@@ -561,6 +579,46 @@ class _EnsemblGenome(GenomeBase):
             if not db_primary in result:
                 result[db_primary] = set()
             result[db_primary].add(gene_stable_id)
+        return result
+
+    def get_external_db_to_translation_id_mapping(self, external_db_name):
+        """Return a dict external id -> set(translation_stable_id, ...)
+        for a given external db - e.g. Uniprot/SWISSPROT
+        see get_external_dbs() for a list
+        """
+        df_external_db = self._load_from_sql(
+            "external_db", ["external_db_id", "db_name"]
+        ).set_index("db_name")
+        external_db_id = df_external_db.at[external_db_name, "external_db_id"]
+        xref = self._load_from_sql(
+            "xref", ["dbprimary_acc", "external_db_id", "xref_id"]
+        ).set_index("xref_id")
+        xref = xref[xref.external_db_id == external_db_id]
+        object_xref = self._load_from_sql(
+            "object_xref", ["ensembl_object_type", "xref_id", "ensembl_id"]
+        )
+        object_xref = object_xref[object_xref.xref_id.isin(set(xref.index))]
+        # object_xref = object_xref[object_xref["ensembl_object_type"] == "Gene"]
+        result = {}
+        translations = self._load_from_sql(
+            "translation", ["translation_id", "stable_id", "version"]
+        ).set_index("translation_id")
+
+        for row in object_xref.itertuples(index=False):
+            if row.ensembl_object_type == "Translation":
+                translation_stable_id = (
+                    translations.at[row.ensembl_id, "stable_id"]
+                    + "."
+                    + str(translations.at[row.ensembl_id, "version"])
+                )
+            else:
+                print(row)
+                raise ValueError("not at translation mapping")
+
+            db_primary = xref.at[row.xref_id, "dbprimary_acc"]
+            if not db_primary in result:
+                result[db_primary] = set()
+            result[db_primary].add(translation_stable_id)
         return result
 
     @lazy_property
