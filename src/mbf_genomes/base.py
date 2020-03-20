@@ -339,7 +339,20 @@ class GenomeBase(ABC):
         return self._transcripts
 
     def name_to_gene_ids(self, name):
-        return set(self.df_genes.index[self.df_genes.name.str.upper() == name.upper()])
+        if not hasattr(self, '_name_to_gene_lookup'):
+            lookup = {}
+            for (a_name, stable_id) in zip(self.df_genes['name'], self.df_genes.index):
+                a_name = a_name.upper()
+                if not a_name in lookup:
+                    lookup[a_name] = set([stable_id])
+                else:
+                    lookup[a_name].add(stable_id)
+            self._name_to_gene_lookup = lookup
+        try:
+            return set(self._name_to_gene_lookup[name.upper()])
+        except KeyError:
+            return set()
+        # return set(self.df_genes.index[self.df_genes.name.str.upper() == name.upper()])
 
     def build_genes_and_transcripts(self):
         genes = {}

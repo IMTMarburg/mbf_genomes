@@ -41,25 +41,28 @@ def download_gunzip_and_attach(url, unzipped_filename, files_to_attach):
             op.write(attach)
 
 
+_ensembl_genome_cache = {}
+
 def EnsemblGenome(species, revision, prebuild_manager=None):
     if prebuild_manager is None:  # pragma: no cover
         prebuild_manager = mbf_externals.get_global_manager()
     if ppg.util.global_pipegraph is not None:
         if not hasattr(ppg.util.global_pipegraph, "_ensembl_genome_dedup"):
             ppg.util.global_pipegraph._ensembl_genome_dedup = {}
-        if (species, revision) in ppg.util.global_pipegraph._ensembl_genome_dedup:
-            res = ppg.util.global_pipegraph._ensembl_genome_dedup[species, revision]
-            if res.prebuild_manager != prebuild_manager:  # pragma: no cover
-                raise ValueError(
-                    "Changing prebuild manager within one pipegraph is not supported"
-                )
-            return res
-        else:
-            res = _EnsemblGenome(species, revision, prebuild_manager)
-            ppg.util.global_pipegraph._ensembl_genome_dedup[species, revision] = res
-            return res
+        cache = ppg.util.global_pipegraph._ensembl_genome_dedup 
     else:
-        return _EnsemblGenome(species, revision, prebuild_manager)
+        cache = _ensembl_genome_cache
+    if (species, revision) in cache:
+        res = cache[species, revision]
+        if res.prebuild_manager != prebuild_manager:  # pragma: no cover
+            raise ValueError(
+                "Changing prebuild manager within one pipegraph is not supported"
+            )
+        return res
+    else:
+        res = _EnsemblGenome(species, revision, prebuild_manager)
+        cache[species, revision] = res
+        return res
 
 
 @msgpack_unpacking_class
@@ -79,6 +82,7 @@ class _EnsemblGenome(GenomeBase):
         self.genetic_code = EukaryoticCode
         self.download_genome()
         self._seq_region_is_canonical = {}
+        self._canonical_cache = {}
 
     def __repr__(self):
         return f"EnsemblGenome({self.species}, {self.revision})"
@@ -570,19 +574,28 @@ class _EnsemblGenome(GenomeBase):
             columns={"gene_stable_id": "stable_id"}
         )
         df = df.join(gene_df.set_index("gene_id"), "gene_id")
-        return df
+        return df.set_index('stable_id')
 
     def name_to_canonical_id(self, name, break_ties_by_number_of_transcripts=False):
         """Given a gene name, lookup up it's stable ids, and return the
         one that's on the primary assembly from the allele group"""
+        key = name,break_ties_by_number_of_transcripts
+        if not key in self._canonical_cache:
+            r = self._name_to_canonical_id(name, break_ties_by_number_of_transcripts)
+            self._canonical_cache[key] = r
+        else:
+            r = self._canonical_cache[name,break_ties_by_number_of_transcripts]
+        return r
+
+    def _name_to_canonical_id(self, name, break_ties_by_number_of_transcripts=False):
         name_candidates = set(
             [x for x in self.name_to_gene_ids(name) if not x.startswith("LRG")]
         )
         if not name_candidates:  # pragma: no cover
             raise KeyError("No gene named %s" % name)
         ag = self.allele_groups
-        ag_ids = ag.alt_allele_group_id[ag.stable_id.isin(name_candidates)].unique()
-        ag_candidates = set(ag.stable_id[ag.alt_allele_group_id.isin(ag_ids)])
+        ag_ids = [x for x in ag.alt_allele_group_id.reindex(name_candidates).unique() if not pd.isnull(x)]
+        ag_candidates = set(ag.index[ag.alt_allele_group_id.isin(ag_ids)])
         if len(ag_ids) == 1 and name_candidates.issubset(ag_candidates):
             # the easy case, everything matches
             on_primary = [
