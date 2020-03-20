@@ -10,9 +10,7 @@ from unittest.mock import patch
 @pytest.mark.usefixtures("new_pipegraph")
 class TestEnsembl:
     def test_download(self, new_pipegraph, mock_download, shared_prebuild):
-        species = (
-            "Ashbya_gossypii"
-        )  # the smallest eukaryotic species at the time of writing this at 2.8 mb
+        species = "Ashbya_gossypii"  # the smallest eukaryotic species at the time of writing this at 2.8 mb
         g = EnsemblGenome(species, "41", prebuild_manager=shared_prebuild)
 
         def shorten_genome_fasta(output_path):
@@ -145,23 +143,17 @@ class TestEnsembl:
     def test_download_jobs_called_init(
         self, new_pipegraph, mock_download, shared_prebuild
     ):
-        species = (
-            "Ashbya_gossypii"
-        )  # the smallest eukaryotic species at the time of writing this at 2.8 mb
+        species = "Ashbya_gossypii"  # the smallest eukaryotic species at the time of writing this at 2.8 mb
         g = EnsemblGenome(species, "41", prebuild_manager=shared_prebuild)
         g.find_prebuild("genome.fasta")  # this is the actual test.
 
     def test_species_formating(self, shared_prebuild):
-        species = (
-            "ashbya_gossypii"
-        )  # the smallest eukaryotic species at the time of writing this at 2.8 mb
+        species = "ashbya_gossypii"  # the smallest eukaryotic species at the time of writing this at 2.8 mb
         with pytest.raises(ValueError):
             EnsemblGenome(species, "41", prebuild_manager=shared_prebuild)
 
     def test_unknown_species_raises(self, mock_download, shared_prebuild):
-        species = (
-            "Unknown_unknown"
-        )  # the smallest eukaryotic species at the time of writing this at 2.8 mb
+        species = "Unknown_unknown"  # the smallest eukaryotic species at the time of writing this at 2.8 mb
         EnsemblGenome(species, "41", prebuild_manager=shared_prebuild).download_genome()
         with pytest.raises(ppg.RuntimeError):
             ppg.run_pipegraph()
@@ -285,9 +277,7 @@ class TestEnsembl:
         )
 
     def test_outside_of_ppg_after_download(self, mock_download, shared_prebuild):
-        species = (
-            "Ashbya_gossypii"
-        )  # the smallest eukaryotic species at the time of writing this at 2.8 mb
+        species = "Ashbya_gossypii"  # the smallest eukaryotic species at the time of writing this at 2.8 mb
         g = EnsemblGenome(species, "41", prebuild_manager=shared_prebuild)
         ppg.run_pipegraph()
         len_genes = len(g.df_genes)
@@ -725,6 +715,17 @@ class TestEnsembl:
         ppg.run_pipegraph()
         ena = g.get_external_db_to_gene_id_mapping("ENA_FEATURE_TRANSCRIPT")
         assert ena["CM003155.1:CDS:9690..12623"] == set(["UMAG_05624"])
+
+    def test_external_db_mapping_translation(
+        self, new_pipegraph, mock_download, shared_prebuild
+    ):
+        # the smallest eukaryotic species at the time of writing this at 2.8 mb
+        g = EnsemblGenome("Ustilago_maydis", 33, shared_prebuild)
+        ppg.run_pipegraph()
+        up = g.get_external_db_to_gene_id_mapping("Uniprot/SWISSPROT")
+        assert up["P30598"] == set(["UMAG_10718"])
+        upp = g.get_external_db_to_translation_id_mapping("Uniprot/SWISSPROT")
+        assert upp["P30598"] == set(["KIS66849.N"])
 
     @patch("pypipegraph.util.checksum_file", return_value="5")
     def test_get_canonical_ids(self, new_pipegraph, mock_download, shared_prebuild):
