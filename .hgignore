@@ -57,3 +57,4 @@ prof/
 *.eggs
 .coverage
 pip-wheel-metadata/
+src/mbf_genomes/testing/.testing_download_cache
