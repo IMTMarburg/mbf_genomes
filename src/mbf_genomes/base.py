@@ -7,7 +7,7 @@ from .common import reverse_complement, df_to_rows
 from .gene import Gene, Transcript
 from mbf_externals.util import lazy_method
 import weakref
-import pandas_msgpack
+import mbf_pandas_msgpack as pandas_msgpack
 import numpy as np
 
 pd.read_msgpack = pandas_msgpack.read_msgpack
@@ -208,57 +208,6 @@ class GenomeBase(ABC):
                             return job
         raise OSError(f"File not found: {name}")
 
-    def build_index(self, aligner, fasta_to_use=None, gtf_to_use=None):
-        if fasta_to_use is None:  # pragma: no cover
-            fasta_to_use = "genome.fasta"
-        if gtf_to_use is None:  # pragma: no cover
-            gtf_to_use = "genes.gtf"
-        name = Path(fasta_to_use).stem
-
-        deps = []
-        if hasattr(aligner, "build_index"):
-            deps.append(self.find_prebuild(fasta_to_use))
-            deps.append(self.find_prebuild(gtf_to_use))
-            postfix = ""
-            func_deps = {}
-
-            def do_align(output_path):
-                aligner.build_index(
-                    [self.find_file(fasta_to_use)],
-                    self.find_file(gtf_to_use) if gtf_to_use is not None else None,
-                    output_path,
-                )
-
-        elif hasattr(aligner, "build_index_from_genome"):
-            deps.extend(aligner.get_genome_deps(self))
-            func_deps = {
-                "build_index_from_genome": aligner.__class__.build_index_from_genome
-            }
-            postfix = "/" + aligner.get_build_key()
-
-            def do_align(output_path):
-                aligner.build_index_from_genome(self, output_path)
-
-        else:
-            raise ValueError("Could not find build_index* function")
-
-        min_ver, max_ver = aligner.get_index_version_range()
-
-        job = self.prebuild_manager.prebuild(
-            f"ensembl/{self.species}_{self.revision}/indices/{name}/{aligner.name}{postfix}",
-            aligner.version,
-            [],
-            ["sentinel.txt", "stdout.txt", "stderr.txt", "cmd.txt"],
-            do_align,
-            minimum_acceptable_version=min_ver,
-            maximum_acceptable_version=max_ver,
-        )
-        self.download_genome()  # so that the jobs are there
-        job.depends_on(deps)
-        for name, f in func_deps.items():
-            job.depends_on_func(name, f)
-        return job
-
     @lazy_method
     def get_chromosome_lengths(self):
         """Return a dict name -> length for the primary assembly"""
@@ -340,9 +289,9 @@ class GenomeBase(ABC):
         return self._transcripts
 
     def name_to_gene_ids(self, name):
-        if not hasattr(self, '_name_to_gene_lookup'):
+        if not hasattr(self, "_name_to_gene_lookup"):
             lookup = {}
-            for (a_name, stable_id) in zip(self.df_genes['name'], self.df_genes.index):
+            for (a_name, stable_id) in zip(self.df_genes["name"], self.df_genes.index):
                 a_name = a_name.upper()
                 if not a_name in lookup:
                     lookup[a_name] = set([stable_id])
@@ -681,16 +630,24 @@ class GenomeBase(ABC):
     )
 
     def get_genes_overlapping(self, chr, start, stop):
-        raise ValueError("Use mbf_genomics.Genes.get_overlapping instead. This has no test cases.")
-        check_overlap = lambda df, interval: np.max(
+        raise ValueError(
+            "Use mbf_genomics.Genes.get_overlapping instead. This has no test cases."
+        )
+        check_overlap = lambda df, interval: np.max(  # noqa: E731
             [
                 np.zeros(len(df)),
-                np.min([df.stop.values, np.ones(len(df), dtype=int) * interval[1]], axis=0)
-                - np.max([df.start.values, np.ones(len(df), dtype=int) * interval[0]], axis=0),
+                np.min(
+                    [df.stop.values, np.ones(len(df), dtype=int) * interval[1]], axis=0
+                )
+                - np.max(
+                    [df.start.values, np.ones(len(df), dtype=int) * interval[0]], axis=0
+                ),
             ],
             axis=0,
         )
-        filter = (self.df_genes["chr"] == chr) & (check_overlap(self.df_genes, [start, stop]) > 0)
+        filter = (self.df_genes["chr"] == chr) & (
+            check_overlap(self.df_genes, [start, stop]) > 0
+        )
         return self.df_genes[filter]
 
 

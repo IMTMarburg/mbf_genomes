@@ -117,6 +117,7 @@ class TestFilebased:
                 assert actual[k] == should[k]
 
     def test_empty_gtf_and_cdna_and_protein(self):
+        from mbf_externals.aligners.subread import Subread
         g = FileBasedGenome(
             "Candidatus_carsonella",
             get_sample_data(
@@ -131,11 +132,14 @@ class TestFilebased:
         g.job_transcripts()
         g.job_genes()
         g.job_proteins()
+        subread = Subread(version="1.6.3")
+        index = g.build_index(subread)
         ppg.run_pipegraph()
         assert len(g.df_transcripts) == 0
         assert len(g.get_gtf()) == 0
         assert len(g.df_genes) == 0
         assert len(g.df_proteins) == 0
+        assert (Path(index.filenames[0]).parent / "subread_index.reads").exists()
 
     def test_protein_creation(self):
         g = FileBasedGenome(

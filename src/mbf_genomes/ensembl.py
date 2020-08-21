@@ -19,7 +19,7 @@ from .base import (
 )
 import pypipegraph as ppg
 from .common import EukaryoticCode
-import pandas_msgpack
+import mbf_pandas_msgpack as pandas_msgpack
 
 
 def download_gunzip_and_attach(url, unzipped_filename, files_to_attach):
@@ -43,13 +43,14 @@ def download_gunzip_and_attach(url, unzipped_filename, files_to_attach):
 
 _ensembl_genome_cache = {}
 
+
 def EnsemblGenome(species, revision, prebuild_manager=None):
     if prebuild_manager is None:  # pragma: no cover
         prebuild_manager = mbf_externals.get_global_manager()
     if ppg.util.global_pipegraph is not None:
         if not hasattr(ppg.util.global_pipegraph, "_ensembl_genome_dedup"):
             ppg.util.global_pipegraph._ensembl_genome_dedup = {}
-        cache = ppg.util.global_pipegraph._ensembl_genome_dedup 
+        cache = ppg.util.global_pipegraph._ensembl_genome_dedup
     else:
         cache = _ensembl_genome_cache
     if (species, revision) in cache:
@@ -632,17 +633,17 @@ class _EnsemblGenome(GenomeBase):
             columns={"gene_stable_id": "stable_id"}
         )
         df = df.join(gene_df.set_index("gene_id"), "gene_id")
-        return df.set_index('stable_id')
+        return df.set_index("stable_id")
 
     def name_to_canonical_id(self, name, break_ties_by_number_of_transcripts=False):
         """Given a gene name, lookup up it's stable ids, and return the
         one that's on the primary assembly from the allele group"""
-        key = name,break_ties_by_number_of_transcripts
+        key = name, break_ties_by_number_of_transcripts
         if not key in self._canonical_cache:
             r = self._name_to_canonical_id(name, break_ties_by_number_of_transcripts)
             self._canonical_cache[key] = r
         else:
-            r = self._canonical_cache[name,break_ties_by_number_of_transcripts]
+            r = self._canonical_cache[name, break_ties_by_number_of_transcripts]
         return r
 
     def _name_to_canonical_id(self, name, break_ties_by_number_of_transcripts=False):
@@ -652,7 +653,11 @@ class _EnsemblGenome(GenomeBase):
         if not name_candidates:  # pragma: no cover
             raise KeyError("No gene named %s" % name)
         ag = self.allele_groups
-        ag_ids = [x for x in ag.alt_allele_group_id.reindex(name_candidates).unique() if not pd.isnull(x)]
+        ag_ids = [
+            x
+            for x in ag.alt_allele_group_id.reindex(name_candidates).unique()
+            if not pd.isnull(x)
+        ]
         ag_candidates = set(ag.index[ag.alt_allele_group_id.isin(ag_ids)])
         if len(ag_ids) == 1 and name_candidates.issubset(ag_candidates):
             # the easy case, everything matches
@@ -695,3 +700,62 @@ class _EnsemblGenome(GenomeBase):
                     "AG candidates: %s\n"
                     "AG ids: %s" % (name, name_candidates, ag_candidates, ag_ids)
                 )
+
+    def build_index(self, aligner, fasta_to_use=None, gtf_to_use=None):
+        if fasta_to_use is None:  # pragma: no cover
+            _fasta_to_use = "genome.fasta"
+        else:
+            _fasta_to_use = fasta_to_use
+        if gtf_to_use is None:  # pragma: no cover
+            _gtf_to_use = "genes.gtf"
+        else:
+            _gtf_to_use = gtf_to_use
+        name = Path(_fasta_to_use).stem
+
+        deps = []
+        if hasattr(aligner, "build_index"):
+            deps.append(self.find_prebuild(_fasta_to_use))
+            deps.append(self.find_prebuild(_gtf_to_use))
+            postfix = ""
+            func_deps = {}
+
+            def do_align(output_path):
+                aligner.build_index(
+                    [self.find_file(_fasta_to_use)],
+                    self.find_file(_gtf_to_use) if gtf_to_use is not None else None,
+                    output_path,
+                )
+
+        elif hasattr(aligner, "build_index_from_genome"):
+            if fasta_to_use or gtf_to_use:
+                raise ValueError(
+                    "Aligner had no build_index, just build_index_from_genome, but fasta_to_use or gtf_to_use were set"
+                )
+            deps.extend(aligner.get_genome_deps(self))
+            func_deps = {
+                "build_index_from_genome": aligner.__class__.build_index_from_genome
+            }
+            postfix = "/" + aligner.get_build_key()
+
+            def do_align(output_path):
+                aligner.build_index_from_genome(self, output_path)
+
+        else:
+            raise ValueError("Could not find build_index* function")
+
+        min_ver, max_ver = aligner.get_index_version_range()
+
+        job = self.prebuild_manager.prebuild(
+            f"ensembl/{self.species}_{self.revision}/indices/{name}/{aligner.name}{postfix}",
+            aligner.version,
+            [],
+            ["sentinel.txt", "stdout.txt", "stderr.txt", "cmd.txt"],
+            do_align,
+            minimum_acceptable_version=min_ver,
+            maximum_acceptable_version=max_ver,
+        )
+        self.download_genome()  # so that the jobs are there
+        job.depends_on(deps)
+        for name, f in func_deps.items():
+            job.depends_on_func(name, f)
+        return job
