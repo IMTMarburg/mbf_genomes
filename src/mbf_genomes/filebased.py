@@ -6,7 +6,7 @@ from mbf_externals.prebuild import (
     _PrebuildFileInvariantsExploding as PrebuildFileInvariantsExploding,
 )
 
-import pandas_msgpack
+import mbf_pandas_msgpack as pandas_msgpack
 
 
 @class_with_downloads
@@ -178,6 +178,74 @@ class FileBasedGenome(GenomeBase):
         for f in files_to_invariant_on:
             j.depends_on_file(f)
         return j
+
+    def build_index(self, aligner, fasta_to_use=None, gtf_to_use=None):
+        if fasta_to_use is None:  # pragma: no cover
+            _fasta_to_use = self.genome_fasta_filename
+        else:
+            _fasta_to_use = fasta_to_use
+        if gtf_to_use is None:  # pragma: no cover
+            _gtf_to_use = self.gtf_filename
+        else:
+            _gtf_to_use = gtf_to_use
+        name = Path(_fasta_to_use).stem
+
+        deps = []
+        if hasattr(aligner, "build_index"):
+            deps.append(self.genome_fasta_dependencies)
+            deps.append(self.gene_gtf_dependencies)
+            postfix = ""
+            func_deps = {}
+
+            def do_align(output_path):
+                aligner.build_index(
+                    [_fasta_to_use], _gtf_to_use, output_path,
+                )
+
+        elif hasattr(aligner, "build_index_from_genome"):
+            if fasta_to_use or gtf_to_use:
+                raise ValueError(
+                    "Aligner had no build_index, just build_index_from_genome, but fasta_to_use or gtf_to_use were set"
+                )
+            deps.extend(aligner.get_genome_deps(self))
+            func_deps = {
+                "build_index_from_genome": aligner.__class__.build_index_from_genome
+            }
+            postfix = "/" + aligner.get_build_key()
+
+            def do_align(output_path):
+                aligner.build_index_from_genome(self, output_path)
+
+        else:
+            raise ValueError("Could not find build_index* function")
+
+        min_ver, max_ver = aligner.get_index_version_range()
+
+        job_dir = Path(
+            f"cache/FileBasedGenome/{self.name}/{aligner.name}/{aligner.version}{postfix}"
+        )  # todo:possibly could improve this to use something inside valid min_ver,max_ver?
+        job = ppg.MultiFileGeneratingJob(
+            [
+                job_dir / "sentinel.txt",
+                job_dir / "stderr.txt",
+                job_dir / "stdout.txt",
+                job_dir / "cmd.txt",
+            ],
+            lambda: do_align(job_dir),
+            empty_ok={
+                str(job_dir / "sentinel.txt"): False,
+                str(job_dir / "stderr.txt"): True,
+                str(job_dir / "stdout.txt"): True,
+                str(job_dir / "cmd.txt"): False,
+            },  # stdout/stderr may be empty
+        )
+        job.depends_on(ppg.FunctionInvariant(str(job_dir / "do_align"), do_align))
+
+        self.download_genome()  # so that the jobs are there
+        job.depends_on(deps)
+        for name, f in func_deps.items():
+            job.depends_on_func(name, f)
+        return job
 
 
 @class_with_downloads
