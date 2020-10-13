@@ -10,7 +10,7 @@ from mbf_sampledata import get_sample_data
 
 @pytest.mark.usefixtures("new_pipegraph")
 class TestFilebased:
-    def test_indexing(self):
+    def test_fasta_and_gtf_indexing(self):
         g = FileBasedGenome(
             "Candidatus_carsonella",
             get_sample_data(
@@ -77,6 +77,34 @@ class TestFilebased:
             == "MFKFINRFLNLKKRYFYIFLINFFYFFNKCNFIKKKKIYKKIITKKFENYLLKLIIQKYAK"
         )
 
+    def test_build_index(self):
+        from mbf_externals.aligners.subread import Subread
+
+        g = FileBasedGenome(
+            "Candidatus_carsonella",
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.dna.toplevel.fa.gz"
+            ),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.42.gtf.gz"
+            ),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.cdna.all.fa.gz"
+            ),
+            get_sample_data(
+                "mbf_genomes/Candidatus_carsonella_ruddii_pv.ASM1036v1.pep.all.fa.gz"
+            ),
+        )
+        g.download_genome()
+        subread = Subread(version="1.6.3")
+        index = g.build_index(subread)
+        ppg.run_pipegraph()
+        assert len(g.df_transcripts) > 0
+        assert len(g.get_gtf()) > 0
+        assert len(g.df_genes) > 0
+        assert len(g.df_proteins) > 0
+        assert (Path(index.filenames[0]).parent / "subread_index.reads").exists()
+
     def test_cdna_creation(self):
         g = FileBasedGenome(
             "Candidatus_carsonella",
@@ -118,6 +146,7 @@ class TestFilebased:
 
     def test_empty_gtf_and_cdna_and_protein(self):
         from mbf_externals.aligners.subread import Subread
+
         g = FileBasedGenome(
             "Candidatus_carsonella",
             get_sample_data(
@@ -505,6 +534,7 @@ class TestFilebased:
 
     def test_get_true_chromosomes(self):
         from mbf_sampledata import get_Candidatus_carsonella_ruddii_pv
+
         g = get_Candidatus_carsonella_ruddii_pv()
         ppg.run_pipegraph()
         assert set(g.get_chromosome_lengths()) == set(g.get_true_chromosomes())
