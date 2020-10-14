@@ -4,7 +4,7 @@ from .ensembl import EnsemblGenome
 from .filebased import FileBasedGenome, InteractiveFileBasedGenome
 
 data_path = Path(__file__).parent.parent.parent / "data"
-__version__ = "0.1"
+__version__ = '0.2'
 
 def Homo_sapiens(rev):
     return EnsemblGenome('Homo_sapiens', rev)
