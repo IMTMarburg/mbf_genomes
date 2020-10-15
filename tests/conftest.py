@@ -18,4 +18,8 @@ from mbf_externals.testing.fixtures import local_store  # noqa:F401
 root = Path(__file__).parent.parent
 sys.path.append(str(root / "src"))
 
+local_store_path = root / "tests" / "run" / "local_store"
+local_store_path.mkdir(exist_ok=True, parents=True)
+local_store = local_store(local_store_path)
+
 from mbf_genomes.testing.fixtures import mock_download, shared_prebuild  # noqa: F401
