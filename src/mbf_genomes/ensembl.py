@@ -20,6 +20,7 @@ from .base import (
 import pypipegraph as ppg
 from .common import EukaryoticCode
 import mbf_pandas_msgpack as pandas_msgpack
+import pkg_resources
 
 
 def download_gunzip_and_attach(url, unzipped_filename, files_to_attach):
@@ -134,30 +135,26 @@ class _EnsemblGenome(GenomeBase):
         )  # can't have this unziped star wants it unziped
 
     def get_additional_gene_gtfs(self):
+        data_path = Path(pkg_resources.resource_filename('mbf_genomes', 'data/'))
         if self.species == "Homo_sapiens":
             if int(self.revision) <= 74:
                 return [
-                    Path(__file__).parent.parent.parent
-                    / "data"
-                    / "ribosomal_genes_grch37.gtf.gz.full.gtf.gz"
+                        data_path / "ribosomal_genes_grch37.gtf.gz.full.gtf.gz"
                 ]
             else:
                 return [
-                    Path(__file__).parent.parent.parent
-                    / "data"
+                        data_path
                     / "ribosomal_genes_grch38.gtf.gz.full.gtf.gz"
                 ]
         elif self.species == "Mus_musculus":
             if int(self.revision) > 67:
                 return [
-                    Path(__file__).parent.parent.parent
-                    / "data"
+                        data_path
                     / "ribosomal_genes_mm10.gtf.gz.full.gtf.gz"
                 ]
         elif self.species == "Ustilago_maydis":
             return [
-                Path(__file__).parent.parent.parent
-                / "data"
+                        data_path
                 / "ustilago_maydis_a2_locus.gff"
             ]
         return []
