@@ -253,7 +253,7 @@ class _EnsemblGenome(GenomeBase):
         return self._pb_download_straight(
             "sql/core/sql_def",
             "mysql/",
-            (fr"{self.species.lower()}_core.+",),
+            (fr"{self.species.lower()}_core_.+",),
             "core.sql.gz",
             lambda match: f"{match.strip()}/{match.strip()}.sql.gz",
         )
@@ -263,7 +263,7 @@ class _EnsemblGenome(GenomeBase):
         job = self._pb_download_straight(
             f"sql/core/{table_name}",
             "mysql/",
-            (fr"{self.species.lower()}_core.+",),
+            (fr"{self.species.lower()}_core_.+",),
             f"{table_name}.txt.gz",
             lambda match: f"{match.strip()}/{table_name.strip()}.txt.gz",
         ).depends_on(self._pb_download_sql_table_definitions())
@@ -453,7 +453,13 @@ class _EnsemblGenome(GenomeBase):
 
         with gzip.GzipFile(self.find_file("core.sql.gz")) as op:
             raw = op.read().decode("utf-8")
-            for p in raw.split("\n-- Table structure")[1:]:
+            if '\n-- Table structure' in raw:
+                parts = raw.split("\n-- Table structure")[1:]
+            else:
+                parts = raw.split("\n\n")
+            for p in parts:
+                if 'CREATE TABLE' not in p:
+                    continue
                 p = p[p.find("CREATE TABLE") :]
                 if "  PRIMARY" in p:
                     p = p[: p.find("  PRIMARY")]
