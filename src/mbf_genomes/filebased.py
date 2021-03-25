@@ -155,7 +155,7 @@ class FileBasedGenome(GenomeBase):
                     seq = "".join(wrappedIterator(80)(seq))
                     op.write(f">{protein_stable_id}\n{seq}\n")
 
-        job = ppg.FileGeneratingJob(self.protein_fasta_filename, create).depends_on(
+        job = ppg.FileGeneratingJob(self.protein_fasta_filename, create, empty_ok=True).depends_on(
             self.job_proteins(), self.genome_fasta_dependencies
         )
         self._download_jobs.append(job)
